@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Root>
+    <WorkBenchVersion>
+        <Version>V1.2.04</Version>
+    </WorkBenchVersion>
+    <MCUInfo>
+        <MCUSerials>AT32F403A</MCUSerials>
+        <MCUName>AT32F403ARGT7</MCUName>
+        <MCUPackage>LQFP64</MCUPackage>
+    </MCUInfo>
+    <DEBUG>
+        <Mode>
+            <ModeSub name="Debug interface" value="SWD"/>
+        </Mode>
+    </DEBUG>
+    <EXINT>
+        <Mode>
+            <ModeSub name="EXINT0" value="TRUE"/>
+        </Mode>
+    </EXINT>
+    <SYSTEM>
+        <Mode>
+            <ModeSub name="Time_Base" value="TMR6"/>
+            <ModeSub name="UART_Printf" value="UART4"/>
+        </Mode>
+    </SYSTEM>
+    <USART3>
+        <Mode>
+            <ModeSub name="Mode" value="Asynchronous"/>
+        </Mode>
+        <Parameters>
+            <ParametersSub name="RealBaudRate" value="115163"/>
+        </Parameters>
+        <Interrupts>
+            <InterruptsSub name="Interrupt_IDLE" value="TRUE"/>
+            <InterruptsSub name="Interrupt_ERR" value="TRUE"/>
+        </Interrupts>
+    </USART3>
+    <UART4>
+        <Mode>
+            <ModeSub name="Mode" value="Asynchronous_TransmitOnly"/>
+        </Mode>
+        <Parameters>
+            <ParametersSub name="VirtualMode" value="VM_ASYNC_T"/>
+            <ParametersSub name="RealBaudRate" value="115163"/>
+        </Parameters>
+    </UART4>
+    <FREERTOS>
+        <Mode>
+            <ModeSub name="Activated" value="TRUE"/>
+        </Mode>
+        <Parameters>
+            <ParametersSub name="MCU_SRAM_SIZE" value="98304"/>
+            <ParametersSub name="configCPU_CLOCK_HZ" value="240000000"/>
+            <ParametersSub name="configUSE_RECURSIVE_MUTEXES" value="1"/>
+        </Parameters>
+        <Tasks>
+            <ParametersGroup>
+                <ParametersSub name="TaskName" value="my_task01"/>
+                <ParametersSub name="TaskPriority" value="0"/>
+                <ParametersSub name="TaskStackSize" value="128"/>
+                <ParametersSub name="TaskEntryFunction" value="my_task01_func"/>
+                <ParametersSub name="TaskCodeGenerationOption" value="Default"/>
+                <ParametersSub name="TaskParameters" value="NULL"/>
+                <ParametersSub name="TaskAllocation" value="Dynamic"/>
+                <ParametersSub name="TaskStackBuffer" value="NULL"/>
+                <ParametersSub name="TaskBuffer" value="NULL"/>
+            </ParametersGroup>
+        </Tasks>
+    </FREERTOS>
+    <DMA>
+        <USART3_RX>
+            <ParametersSub name="Instance" value="DMA1_Channel1"/>
+            <ParametersSub name="Mode" value="TRUE"/>
+            <ParametersSub name="Priority" value="DMA_PRIORITY_HIGH"/>
+            <ParametersSub name="Interrupt_FDT" value="ENABLE"/>
+            <ParametersSub name="Interrupt_HDT" value="ENABLE"/>
+            <ParametersSub name="Interrupt_DTERR" value="ENABLE"/>
+        </USART3_RX>
+        <USART3_TX>
+            <ParametersSub name="Instance" value="DMA1_Channel2"/>
+            <ParametersSub name="Priority" value="DMA_PRIORITY_MEDIUM"/>
+            <ParametersSub name="Interrupt_FDT" value="ENABLE"/>
+            <ParametersSub name="Interrupt_DTERR" value="ENABLE"/>
+        </USART3_TX>
+    </DMA>
+    <NVIC>
+        <SVC_Handler>1;0;0;0;0;0</SVC_Handler>
+        <PendSV_Handler>1;15;0;1;0;0</PendSV_Handler>
+        <SysTick_Handler>1;15;0;1;0;1</SysTick_Handler>
+        <FLASH_IRQHandler>0;5;0;1;0;0</FLASH_IRQHandler>
+        <CRM_IRQHandler>0;5;0;1;0;0</CRM_IRQHandler>
+        <EXINT0_IRQHandler>1;5;0;1;0;1</EXINT0_IRQHandler>
+        <DMA1_Channel1_IRQHandler>1;5;0;1;0;1</DMA1_Channel1_IRQHandler>
+        <DMA1_Channel2_IRQHandler>1;5;0;1;0;1</DMA1_Channel2_IRQHandler>
+        <USART3_IRQHandler>1;5;0;1;0;1</USART3_IRQHandler>
+        <UART4_IRQHandler>0;5;0;1;0;0</UART4_IRQHandler>
+    </NVIC>
+    <GPIO>
+        <Signal SignalName="EXINT0" PinName="PA0">
+            <Parameters name="GPIO_PullType_Set" value="GPIO_PULL_DOWN"/>
+        </Signal>
+        <Signal SignalName="GPIO_Output" PinName="PC5">
+            <Parameters name="Label" value="Eg_Launch"/>
+        </Signal>
+        <Signal SignalName="GPIO_Output" PinName="PB0">
+            <Parameters name="Label" value="Eg_DTR"/>
+        </Signal>
+        <Signal SignalName="GPIO_Output" PinName="PB2/BOOT1">
+            <Parameters name="Label" value="Eg_Power"/>
+        </Signal>
+        <Signal SignalName="USART3_TX" PinName="PB10">
+            <Parameters name="Label" value="USART3_TX_Eg"/>
+        </Signal>
+        <Signal SignalName="USART3_RX" PinName="PB11">
+            <Parameters name="GPIO_PullType_Set" value="GPIO_PULL_UP"/>
+            <Parameters name="Label" value="USART3_RX_Eg"/>
+        </Signal>
+    </GPIO>
+    <ClockConfiguration>
+        <rtcsel>0</rtcsel>
+        <hext>8.000000</hext>
+        <hextdiv>2</hextdiv>
+        <pllhextdiv>0</pllhextdiv>
+        <pllrcs>1</pllrcs>
+        <pllmult>60</pllmult>
+        <sclkselect>1</sclkselect>
+        <ahbdiv>1</ahbdiv>
+        <apb1div>2</apb1div>
+        <apb2div>2</apb2div>
+        <usbdiv>4.0</usbdiv>
+        <hicktousb>1</hicktousb>
+        <hicktosclk>0</hicktosclk>
+        <clkout>0</clkout>
+        <clkoutdiv>1</clkoutdiv>
+        <adcdiv>6</adcdiv>
+        <systicsel>1</systicsel>
+    </ClockConfiguration>
+    <PINInfo>
+        <PinSub pinname="PA0" signalname="EXINT0" signaltype="3"/>
+        <PinSub pinname="PC5" signalname="GPIO_Output" signaltype="3"/>
+        <PinSub pinname="PB0" signalname="GPIO_Output" signaltype="3"/>
+        <PinSub pinname="PB2/BOOT1" signalname="GPIO_Output" signaltype="3"/>
+        <PinSub pinname="PB10" signalname="USART3_TX" signaltype="2"/>
+        <PinSub pinname="PB11" signalname="USART3_RX" signaltype="2"/>
+        <PinSub pinname="PA13" signalname="DEBUG_JTMS_SWDIO" signaltype="2"/>
+        <PinSub pinname="PA14" signalname="DEBUG_JTCK_SWCLK" signaltype="2"/>
+        <PinSub pinname="PC10" signalname="UART4_TX" signaltype="2"/>
+    </PINInfo>
+    <ProjectInfomation>
+        <ProjectName>AT32F403_EG800AK</ProjectName>
+        <ProjectLocation>C:/My_Project/Crucial_Project/FreeRTOS</ProjectLocation>
+        <ToolchainIDE>MDK_V5</ToolchainIDE>
+        <ARMCompiler>1</ARMCompiler>
+        <BackupCode>true</BackupCode>
+        <KeepUserCode>true</KeepUserCode>
+        <NotUsedPinAnalog>false</NotUsedPinAnalog>
+        <CodeSplitIP>true</CodeSplitIP>
+        <AddNecessaryFileFlag>false</AddNecessaryFileFlag>
+        <DeletePriviousFiles>true</DeletePriviousFiles>
+        <MinHeapSize>0x200</MinHeapSize>
+        <MinStackSize>0x400</MinStackSize>
+        <UseFirmware>true</UseFirmware>
+        <PackageVersion>V2.2.2</PackageVersion>
+    </ProjectInfomation>
+    <FunctionRankInfo>
+        <RankSub RankNum="1" FixPosFlag="TRUE" FuncName="wk_system_clock_config" InstanceName="CRM" CodeSection="config_system_clock_rtthread" MainDoNotCallFlag="FALSE"/>
+        <RankSub RankNum="2" FixPosFlag="TRUE" FuncName="wk_periph_clock_config" InstanceName="CRM" CodeSection="config periph clock" MainDoNotCallFlag="FALSE"/>
+        <RankSub RankNum="4" FixPosFlag="TRUE" FuncName="wk_debug_config" InstanceName="DEBUG" CodeSection="debug function" MainDoNotCallFlag="FALSE"/>
+        <RankSub RankNum="7" FixPosFlag="TRUE" FuncName="wk_nvic_config" InstanceName="NVIC" CodeSection="config nvic" MainDoNotCallFlag="FALSE"/>
+        <RankSub RankNum="8" FixPosFlag="TRUE" FuncName="wk_timebase_init" InstanceName="SYSTEM" CodeSection="config timebase" MainDoNotCallFlag="FALSE"/>
+        <RankSub RankNum="9" FixPosFlag="TRUE" FuncName="wk_gpio_config" InstanceName="GPIO" CodeSection="gpio function" MainDoNotCallFlag="FALSE"/>
+        <RankSub RankNum="14" FixPosFlag="FALSE" FuncName="wk_dma1_channel1_init" InstanceName="DMA1_Channel1" CodeSection="dma1_channel1_init" MainDoNotCallFlag="FALSE"/>
+        <RankSub RankNum="15" FixPosFlag="FALSE" FuncName="wk_dma1_channel2_init" InstanceName="DMA1_Channel2" CodeSection="dma1_channel2_init" MainDoNotCallFlag="FALSE"/>
+        <RankSub RankNum="34" FixPosFlag="FALSE" FuncName="wk_usart3_init" InstanceName="USART3" CodeSection="usart3 function" MainDoNotCallFlag="FALSE"/>
+        <RankSub RankNum="35" FixPosFlag="FALSE" FuncName="wk_uart4_init" InstanceName="UART4" CodeSection="uart4 function" MainDoNotCallFlag="FALSE"/>
+        <RankSub RankNum="52" FixPosFlag="FALSE" FuncName="wk_exint_config" InstanceName="EXINT" CodeSection="exint function" MainDoNotCallFlag="FALSE"/>
+    </FunctionRankInfo>
+</Root>
