@@ -132,7 +132,7 @@ int main(void)
   wk_exint_config();
 
   /* add user code begin 2 */
-
+    wk_delay_ms(3000);
   /* add user code end 2 */
 
   /* init freertos function. */

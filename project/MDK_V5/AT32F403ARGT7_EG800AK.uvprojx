@@ -79,9 +79,9 @@
             <nStopB2X>0</nStopB2X>
           </BeforeMake>
           <AfterMake>
-            <RunUserProg1>0</RunUserProg1>
+            <RunUserProg1>1</RunUserProg1>
             <RunUserProg2>0</RunUserProg2>
-            <UserProg1Name></UserProg1Name>
+            <UserProg1Name>./Keil5_disp_size_bar.exe</UserProg1Name>
             <UserProg2Name></UserProg2Name>
             <UserProg1Dos16Mode>0</UserProg1Dos16Mode>
             <UserProg2Dos16Mode>0</UserProg2Dos16Mode>
@@ -336,10 +336,10 @@
             <v6WtE>0</v6WtE>
             <v6Rtti>0</v6Rtti>
             <VariousControls>
-              <MiscControls></MiscControls>
+              <MiscControls>-fno-finite-math-only</MiscControls>
               <Define>AT32F403ARGT7, USE_STDPERIPH_DRIVER, AT_START_F403A_V1</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..\libraries\drivers\inc;..\..\libraries\cmsis\cm4\core_support;..\..\libraries\cmsis\cm4\device_support;..\inc;../../middlewares/freertos/source/include;../../middlewares/freertos/source/portable/memmang;../../middlewares/freertos/source/portable/GCC/ARM_CM4F</IncludePath>
+              <IncludePath>..\..\libraries\drivers\inc;..\..\libraries\cmsis\cm4\core_support;..\..\libraries\cmsis\cm4\device_support;..\inc;../../middlewares/freertos/source/include;../../middlewares/freertos/source/portable/memmang;../../middlewares/freertos/source/portable/GCC/ARM_CM4F;..\..\Treo\Common;..\..\Treo\Board;..\..\Treo\Driver;..\..\Treo\Service;..\..\Treo\System</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -632,6 +632,141 @@
               <FileName>stream_buffer.c</FileName>
               <FileType>1</FileType>
               <FilePath>../../middlewares/freertos/source/stream_buffer.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Common</GroupName>
+          <Files>
+            <File>
+              <FileName>cJSON.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Treo\Common\cJSON.c</FilePath>
+            </File>
+            <File>
+              <FileName>cJSON.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\Treo\Common\cJSON.h</FilePath>
+            </File>
+            <File>
+              <FileName>log.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Treo\Common\log.c</FilePath>
+            </File>
+            <File>
+              <FileName>log.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\Treo\Common\log.h</FilePath>
+            </File>
+            <File>
+              <FileName>lwrb.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Treo\Common\lwrb.c</FilePath>
+            </File>
+            <File>
+              <FileName>lwrb.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\Treo\Common\lwrb.h</FilePath>
+            </File>
+            <File>
+              <FileName>md5.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Treo\Common\md5.c</FilePath>
+            </File>
+            <File>
+              <FileName>md5.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\Treo\Common\md5.h</FilePath>
+            </File>
+            <File>
+              <FileName>sm4.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Treo\Common\sm4.c</FilePath>
+            </File>
+            <File>
+              <FileName>sm4.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\Treo\Common\sm4.h</FilePath>
+            </File>
+            <File>
+              <FileName>types.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\Treo\Common\types.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Board</GroupName>
+          <Files>
+            <File>
+              <FileName>board_eg.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\Treo\Board\board_eg.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Driver</GroupName>
+          <Files>
+            <File>
+              <FileName>drv_eg.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Treo\Driver\drv_eg.c</FilePath>
+            </File>
+            <File>
+              <FileName>drv_eg.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\Treo\Driver\drv_eg.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Service</GroupName>
+          <Files>
+            <File>
+              <FileName>eg_service.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Treo\Service\eg_service.c</FilePath>
+            </File>
+            <File>
+              <FileName>eg_service.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\Treo\Service\eg_service.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>App</GroupName>
+          <Files>
+            <File>
+              <FileName>app_eg.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Treo\App\app_eg.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_eg.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\Treo\App\app_eg.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>System</GroupName>
+          <Files>
+            <File>
+              <FileName>system_main.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Treo\System\system_main.c</FilePath>
+            </File>
+            <File>
+              <FileName>system_main.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\Treo\System\system_main.h</FilePath>
+            </File>
+            <File>
+              <FileName>system_version.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\Treo\System\system_version.h</FilePath>
             </File>
           </Files>
         </Group>

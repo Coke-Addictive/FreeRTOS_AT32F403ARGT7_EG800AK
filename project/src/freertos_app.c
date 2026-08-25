@@ -11,7 +11,8 @@
 
 /* private includes ----------------------------------------------------------*/
 /* add user code begin private includes */
-
+#include "log.h"
+#include "system_main.h"
 /* add user code end private includes */
 
 /* private typedef -----------------------------------------------------------*/
@@ -107,7 +108,8 @@ void freertos_task_create(void)
 void wk_freertos_init(void)
 {
   /* add user code begin freertos_init 0 */
-
+    Log_Init();
+    LOG("FreeRTOS初始化...");
   /* add user code end freertos_init 0 */
 
   /* enter critical */
@@ -116,7 +118,10 @@ void wk_freertos_init(void)
   freertos_task_create();
 	
   /* add user code begin freertos_init 1 */
-
+    if (System_Main_Init() != RESULT_SUCCESS) {
+        LOG("System任务创建失败");
+        NVIC_SystemReset();
+    }
   /* add user code end freertos_init 1 */
 
   /* exit critical */

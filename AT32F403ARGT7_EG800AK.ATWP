@@ -148,7 +148,7 @@
         <PinSub pinname="PC10" signalname="UART4_TX" signaltype="2"/>
     </PINInfo>
     <ProjectInfomation>
-        <ProjectName>AT32F403_EG800AK</ProjectName>
+        <ProjectName>AT32F403ARGT7_EG800AK</ProjectName>
         <ProjectLocation>C:/My_Project/Crucial_Project/FreeRTOS</ProjectLocation>
         <ToolchainIDE>MDK_V5</ToolchainIDE>
         <ARMCompiler>1</ARMCompiler>

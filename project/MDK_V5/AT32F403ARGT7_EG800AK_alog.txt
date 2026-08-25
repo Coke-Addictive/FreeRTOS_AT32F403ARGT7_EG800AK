@@ -1,0 +1,23 @@
+[project_search_path]: ./
+[map_search_path]: ./
+[project_file_path]: .//AT32F403ARGT7_EG800AK.uvprojx
+[ map_file_path]: .//listings/AT32F403ARGT7_EG800AK.map
+[parse_keil_map start]: 
+[Found keyword]: ----------Execution Region----------
+[name]:  ER_IROM1 
+[Exec base]: 0x8000000
+[Size]: 0x62f4
+[Max]: 0x100000
+[Found keyword]: ----------Execution Region----------
+[name]:  RW_IRAM1 
+[Exec base]: 0x20000000
+[Size]: 0x36a0
+[Max]: 0x18000
+[parse_keil_map over printf bar]: 
+  RW_IRAM1 :0x20000000
+   96.00 KB :|¡ö¡ö__________________|   14.23 % (   13.66 KB /    96.00 KB) [84320 B]
+  ER_IROM1 :0x8000000
+    1.00 MB :|____________________|    2.42 % (    0.02 MB /     1.00 MB) [1023244 B]
+[export csv]: ./AT32F403ARGT7_EG800AK_sort_by_flash.csv
+[export csv]: ./AT32F403ARGT7_EG800AK_sort_by_ram.csv
+[export xlsx]: AT32F403ARGT7_EG800AK_analysis.xlsx
