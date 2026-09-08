@@ -5,6 +5,8 @@
 #include "queue.h"
 #include "task.h"
 
+#include "app_eg.h"
+
 #define LOG_TAG "SYS"
 #include "log.h"
 
@@ -36,10 +38,11 @@ Result_t System_Main_Init(void) {
 static void System_Main_Task(void *parameter) {
 
     LOG("主任务启动成功");
-    
-    
+    App_EG_Init();
+    App_EG_Launch();
+
     while (1) {
         LOG("Main Task Running...");
-        vTaskDelay(1000);
+        vTaskDelay(30000);
     }
 }

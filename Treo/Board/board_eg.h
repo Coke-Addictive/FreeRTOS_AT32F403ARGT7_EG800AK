@@ -14,7 +14,6 @@
 #define BOARD_EG_POWER_PIN              Eg_Power_PIN
 #define BOARD_EG_POWER_GPIO_PORT        Eg_Power_GPIO_PORT
 
-/* RI 当前暂不使用，WorkBench 未生成专用别名，按硬件文档保留 PB1 资源。 */
 #define BOARD_EG_RI_PIN                 GPIO_PINS_1
 #define BOARD_EG_RI_GPIO_PORT           GPIOB
 
@@ -29,10 +28,12 @@
 #define BOARD_EG_USART_INIT()           wk_usart3_init()
 
 
-/* EG800AK DMA 资源：DMA1 Channel1 接收，DMA1 Channel2 发送。 */
+/* EG800AK DMA 资源：DMA1 Channel1 RX接收，DMA1 Channel2 TX发送。 */
 #define BOARD_EG_RX_DMA_CHANNEL         DMA1_CHANNEL1
 #define BOARD_EG_RX_DMA_GL_FLAG         DMA1_GL1_FLAG
 #define BOARD_EG_RX_DMA_INIT()          wk_dma1_channel1_init()
+
+
 #define BOARD_EG_TX_DMA_CHANNEL         DMA1_CHANNEL2
 #define BOARD_EG_TX_DMA_GL_FLAG         DMA1_GL2_FLAG
 #define BOARD_EG_TX_DMA_INIT()          wk_dma1_channel2_init()

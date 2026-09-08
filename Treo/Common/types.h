@@ -33,7 +33,9 @@ typedef enum {
 
 
 
-
+#define VALUE_MAX(a, b)     (((a) > (b)) ? (a) : (b))               // 获取两个值中的较大值
+#define VALUE_MIN(a, b)     (((a) < (b)) ? (a) : (b))               // 获取两个值中的较小值
+#define ARRAY_SIZE(arr)     (sizeof(arr) / sizeof((arr)[0]))        // 获取静态数组元素数量
 
 
 

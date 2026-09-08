@@ -100,36 +100,8 @@ int main(void)
   /* init gpio function. */
   wk_gpio_config();
 
-  /* init dma1 channel1 */
-  wk_dma1_channel1_init();
-  /* config dma channel transfer parameter */
-  /* user need to modify define values DMAx_CHANNELy_XXX_BASE_ADDR 
-     and DMAx_CHANNELy_BUFFER_SIZE in at32xxx_wk_config.h */
-  wk_dma_channel_config(DMA1_CHANNEL1, 
-                        (uint32_t)&USART3->dt, 
-                        DMA1_CHANNEL1_MEMORY_BASE_ADDR, 
-                        DMA1_CHANNEL1_BUFFER_SIZE);
-  dma_channel_enable(DMA1_CHANNEL1, TRUE);
-
-  /* init dma1 channel2 */
-  wk_dma1_channel2_init();
-  /* config dma channel transfer parameter */
-  /* user need to modify define values DMAx_CHANNELy_XXX_BASE_ADDR 
-     and DMAx_CHANNELy_BUFFER_SIZE in at32xxx_wk_config.h */
-  wk_dma_channel_config(DMA1_CHANNEL2, 
-                        (uint32_t)&USART3->dt, 
-                        DMA1_CHANNEL2_MEMORY_BASE_ADDR, 
-                        DMA1_CHANNEL2_BUFFER_SIZE);
-  dma_channel_enable(DMA1_CHANNEL2, TRUE);
-
-  /* init usart3 function. */
-  wk_usart3_init();
-
   /* init uart4 function. */
   wk_uart4_init();
-
-  /* init exint function. */
-  wk_exint_config();
 
   /* add user code begin 2 */
     wk_delay_ms(3000);
@@ -149,5 +121,3 @@ int main(void)
   /* add user code begin 4 */
 
   /* add user code end 4 */
-
-  

@@ -170,10 +170,10 @@
         <RankSub RankNum="7" FixPosFlag="TRUE" FuncName="wk_nvic_config" InstanceName="NVIC" CodeSection="config nvic" MainDoNotCallFlag="FALSE"/>
         <RankSub RankNum="8" FixPosFlag="TRUE" FuncName="wk_timebase_init" InstanceName="SYSTEM" CodeSection="config timebase" MainDoNotCallFlag="FALSE"/>
         <RankSub RankNum="9" FixPosFlag="TRUE" FuncName="wk_gpio_config" InstanceName="GPIO" CodeSection="gpio function" MainDoNotCallFlag="FALSE"/>
-        <RankSub RankNum="14" FixPosFlag="FALSE" FuncName="wk_dma1_channel1_init" InstanceName="DMA1_Channel1" CodeSection="dma1_channel1_init" MainDoNotCallFlag="FALSE"/>
-        <RankSub RankNum="15" FixPosFlag="FALSE" FuncName="wk_dma1_channel2_init" InstanceName="DMA1_Channel2" CodeSection="dma1_channel2_init" MainDoNotCallFlag="FALSE"/>
-        <RankSub RankNum="34" FixPosFlag="FALSE" FuncName="wk_usart3_init" InstanceName="USART3" CodeSection="usart3 function" MainDoNotCallFlag="FALSE"/>
+        <RankSub RankNum="14" FixPosFlag="FALSE" FuncName="wk_dma1_channel1_init" InstanceName="DMA1_Channel1" CodeSection="dma1_channel1_init" MainDoNotCallFlag="TRUE"/>
+        <RankSub RankNum="15" FixPosFlag="FALSE" FuncName="wk_dma1_channel2_init" InstanceName="DMA1_Channel2" CodeSection="dma1_channel2_init" MainDoNotCallFlag="TRUE"/>
+        <RankSub RankNum="34" FixPosFlag="FALSE" FuncName="wk_usart3_init" InstanceName="USART3" CodeSection="usart3 function" MainDoNotCallFlag="TRUE"/>
         <RankSub RankNum="35" FixPosFlag="FALSE" FuncName="wk_uart4_init" InstanceName="UART4" CodeSection="uart4 function" MainDoNotCallFlag="FALSE"/>
-        <RankSub RankNum="52" FixPosFlag="FALSE" FuncName="wk_exint_config" InstanceName="EXINT" CodeSection="exint function" MainDoNotCallFlag="FALSE"/>
+        <RankSub RankNum="52" FixPosFlag="FALSE" FuncName="wk_exint_config" InstanceName="EXINT" CodeSection="exint function" MainDoNotCallFlag="TRUE"/>
     </FunctionRankInfo>
 </Root>

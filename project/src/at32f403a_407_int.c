@@ -30,7 +30,8 @@
 
 /* private includes ----------------------------------------------------------*/
 /* add user code begin private includes */
-
+#include "drv_eg.h"
+#include "eg_service.h"
 /* add user code end private includes */
 
 /* private typedef -----------------------------------------------------------*/
@@ -243,6 +244,10 @@ void DMA1_Channel1_IRQHandler(void)
     /* add user code begin DMA1_FDT1_FLAG */
     /* handle full data transfer and clear flag */
     dma_flag_clear(DMA1_FDT1_FLAG);
+
+    /* DMA1_CH1传输完成中断,用户区代码 */
+    Drv_EG_RX_DMA_Channel_IRQHandler();
+    Eg800_Service_Rx_Notify_From_ISR();
     /* add user code end DMA1_FDT1_FLAG */ 
   }
 
@@ -251,6 +256,10 @@ void DMA1_Channel1_IRQHandler(void)
     /* add user code begin DMA1_HDT1_FLAG */
     /* handle half data transfer and clear flag */
     dma_flag_clear(DMA1_HDT1_FLAG);
+
+    /* DMA1_CH1半传输完成中断,用户区代码 */
+    Drv_EG_RX_DMA_Channel_IRQHandler();  
+    Eg800_Service_Rx_Notify_From_ISR();
     /* add user code end DMA1_HDT1_FLAG */ 
   }
 
@@ -259,6 +268,8 @@ void DMA1_Channel1_IRQHandler(void)
     /* add user code begin DMA1_DTERR1_FLAG */
     /* handle error transfer and clear flag */
     dma_flag_clear(DMA1_DTERR1_FLAG);
+
+    Drv_EG_RX_DMA_Error_IRQHandler(); 
     /* add user code end DMA1_DTERR1_FLAG */ 
   }
 
@@ -283,6 +294,9 @@ void DMA1_Channel2_IRQHandler(void)
     /* add user code begin DMA1_FDT2_FLAG */
     /* handle full data transfer and clear flag */
     dma_flag_clear(DMA1_FDT2_FLAG);
+
+    /* DMA1_CH2传输完成中断,用户区代码 */
+    Drv_EG_TX_DMA_Channel_IRQHandler();
     /* add user code end DMA1_FDT2_FLAG */ 
   }
 
@@ -291,6 +305,9 @@ void DMA1_Channel2_IRQHandler(void)
     /* add user code begin DMA1_DTERR2_FLAG */
     /* handle error transfer and clear flag */
     dma_flag_clear(DMA1_DTERR2_FLAG);
+
+
+    Drv_EG_TX_DMA_Error_IRQHandler();
     /* add user code end DMA1_DTERR2_FLAG */ 
   }
 
@@ -317,6 +334,9 @@ void USART3_IRQHandler(void)
     /* add user code begin USART3_USART_NERR_FLAG, USART_ROERR_FLAG or USART_FERR_FLAG */
     /* clear flag */
     usart_flag_clear(USART3, USART_NERR_FLAG | USART_ROERR_FLAG | USART_FERR_FLAG);
+
+    // 串口错误
+    Drv_EG_USART_Error_IRQHandler();
     /* add user code end  USART3_USART_NERR_FLAG, USART_ROERR_FLAG or USART_FERR_FLAG */ 
   }
 
@@ -325,6 +345,10 @@ void USART3_IRQHandler(void)
     /* add user code begin USART3_USART_IDLEF_FLAG */
     /* clear flag */
     usart_flag_clear(USART3, USART_IDLEF_FLAG);
+
+     /* 用户区代码 */
+    Drv_EG_USART_IRQHandler();
+    Eg800_Service_Rx_Notify_From_ISR();
     /* add user code end USART3_USART_IDLEF_FLAG */ 
   }
 
