@@ -1,4 +1,4 @@
-#include "eg800_basic.h"
+#include "eg_basic.h"
 
 
 #define LOG_TAG "EG_BASIC"
@@ -8,11 +8,7 @@
 #include "eg_service.h"
 
 
-#include "stdbool.h"
 
-
-#include "FreeRTOS.h"
-#include "task.h"
 
 
 

@@ -694,24 +694,14 @@
               <FilePath>..\..\Treo\Service\eg_service.h</FilePath>
             </File>
             <File>
-              <FileName>eg800_text.c</FileName>
+              <FileName>eg_basic.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\Treo\Service\eg800_text.c</FilePath>
+              <FilePath>..\..\Treo\Service\eg_basic.c</FilePath>
             </File>
             <File>
-              <FileName>eg800_text.h</FileName>
+              <FileName>eg_basic.h</FileName>
               <FileType>5</FileType>
-              <FilePath>..\..\Treo\Service\eg800_text.h</FilePath>
-            </File>
-            <File>
-              <FileName>eg800_basic.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\Treo\Service\eg800_basic.c</FilePath>
-            </File>
-            <File>
-              <FileName>eg800_basic.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\..\Treo\Service\eg800_basic.h</FilePath>
+              <FilePath>..\..\Treo\Service\eg_basic.h</FilePath>
             </File>
           </Files>
         </Group>

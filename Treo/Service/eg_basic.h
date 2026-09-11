@@ -1,5 +1,5 @@
-#ifndef EG800_BASIC_H_
-#define EG800_BASIC_H_
+#ifndef EG_BASIC_H_
+#define EG_BASIC_H_
 
 
 #include <stdint.h>
@@ -16,6 +16,7 @@
 
 
 #define EG800_BASIC_CME_SIM_NOT_INSERTED      10   // +CME ERROR: 10，表示SIM卡未插入
+
 // SIM卡状态
 typedef enum {
     EG800_BASIC_SIM_STATE_UNKNOWN = 0,      /* SIM 状态未知 */
@@ -64,4 +65,4 @@ Result_t Eg800_Basic_Init(void);
 
 
 
-#endif // EG800_BASIC_H_
+#endif // EG_BASIC_H_

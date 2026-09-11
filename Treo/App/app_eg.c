@@ -2,7 +2,7 @@
 
 #include "drv_eg.h"
 #include "eg_service.h"
-#include "eg800_basic.h"
+#include "eg_basic.h"
 
 
 #include "FreeRTOS.h"

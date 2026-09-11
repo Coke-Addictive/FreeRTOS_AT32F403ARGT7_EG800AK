@@ -7,6 +7,13 @@
 #include "stddef.h"
 #include "string.h"
 
+// FreeRTOS 资源
+#include "FreeRTOS.h"
+#include "queue.h"
+#include "task.h"
+#include "semphr.h"
+
+
 /* 请求字段为 0 时使用的默认超时 */
 #define EG800_AT_DEFAULT_FINAL_TIMEOUT_MS           3000U                   // 默认等待 OK/ERROR 的超时时间
 #define EG800_AT_DEFAULT_URC_TIMEOUT_MS             5000U                   // 默认等待异步 URC 的超时时间
@@ -21,12 +28,9 @@
 #define EG800_AT_MAX_RAW_SIZE                       1050U                   // 单次原始数据接收最大长度1KB，再给点余量
 
 
-// 通知
-#define EG800_SERVICE_NOTIFY_INDEX                  0U                      // EG800服务任务的工作事件
-#define EG800_AT_COMPLETION_NOTIFY_INDEX            1U                      // AT调用任务的完成事件
 
 
-#define EG800_AT_SYNC_MAX_WAIT_MS                   400000U                 // Eg800_AtExec成功入队后，等待整条请求完成的最大全局保护时间
+#define EG800_AT_SYNC_MAX_WAIT_MS                   300000U                 // Eg800_AT_Execute成功入队后，等待整条请求完成的最大全局保护时间
 
 
 
@@ -106,7 +110,7 @@ typedef struct {
 
 
 
-// AT 请求结构体（调用者填写该结构体后传给Eg800_AtExec）
+// AT 请求结构体（调用者填写该结构体后传给Eg800_AT_Execute）
 typedef struct {
     Eg800AtCmd_t cmd;                    // 逻辑命令编号
     Eg800AtFlow_e flow;                  // 采用的AT通信流程
@@ -131,7 +135,7 @@ typedef struct {
     uint8_t *raw_buf;                    // 调用者提供的用于保存模块返回原始数据的缓冲区，可为 NULL
     size_t raw_buf_size;                 // 调用者提供的用于保存模块返回原始数据的缓冲区大小
     size_t raw_expect_len;               // 期望接收的原始数据长度(raw_expect_len：> 0 且 <= raw_buf_size 且 <= EG800_AT_MAX_RAW_SIZE)
-    bool allow_during_shutdown;          // Service停止接收普通请求时，是否仍允许执行该请求(一般命令为false,关机、断开网络等收尾命令可设为true)
+    bool allow_during_shutdown;          // Service停止接收普通请求时，是否仍允许执行该请求(一般命令为false,关机、断开网络等收尾命令可设为true，当前为预留)
 } Eg800AtRequest_t;
 
 
@@ -142,8 +146,8 @@ typedef struct {
 Result_t Eg800_Service_Init(void);
 
 
-// 同步提交并执行一条AT请求。
-Eg800AtResult_e Eg800_AtExec(const Eg800AtRequest_t *request,Eg800AtResultInfo_t *result_info);
+// 同步提交并执行一条AT请求。（调用方式改为result = Eg800_AT_Execute(&request, &result_info, s_mqtt_at_completion_sem);）
+Eg800AtResult_e Eg800_AT_Execute(const Eg800AtRequest_t *request,Eg800AtResultInfo_t *result_info, SemaphoreHandle_t completion_sem);
 
 
 
