@@ -12,6 +12,58 @@
 #define LOG_TAG "EG"
 #include "log.h"
 
+#define APP_EG_BASIC_REFRESH_POLL_MS        100U    // 等待 Basic 刷新时的轮询间隔，单位 ms
+#define APP_EG_BASIC_REFRESH_WAIT_MS        30000U  // 等待 Basic 全量刷新完成的最长时间，单位 ms
+#define APP_EG_USER_QUERY_DELAY_MS          20000U  // 模拟用户首次查询前的等待时间，单位 ms
+
+/**
+ * @brief 打印一份 Basic 信息快照。
+ * @param stage 当前快照所处的测试阶段。
+ * @param snapshot 待打印的 Basic 信息快照。
+ */
+static void App_EG_Log_Basic_Snapshot(const char *stage, const Eg800BasicSnapshot_t *snapshot) {
+    if ((stage == NULL) || (snapshot == NULL)) {
+        return;
+    }
+
+    LOG("Basic 快照[%s]: update_tick=%lu, refreshing=%u", stage, (unsigned long)snapshot->update_tick, (unsigned int)snapshot->refresh_in_progress);
+    LOG("Basic 状态[%s]: SIM=%u, CSQ=%u, BER=%u, operator_type=%u", stage, (unsigned int)snapshot->info.sim_state, (unsigned int)snapshot->info.csq, (unsigned int)snapshot->info.ber, (unsigned int)snapshot->info.operator_type);
+    LOG("Basic 标识[%s]: IMEI=%s, IMSI=%s, ICCID=%s", stage, snapshot->info.imei, snapshot->info.imsi, snapshot->info.iccid);
+    LOG("Basic 其他[%s]: phone=%s, operator=%s, firmware=%s", stage, snapshot->info.phone_number, snapshot->info.operator_name, snapshot->info.firmware_version);
+}
+
+/**
+ * @brief 等待 Basic 后台全量刷新结束。
+ * @param snapshot 刷新结束时的快照输出地址。
+ * @return true 表示刷新已结束，false 表示读取失败或等待超时。
+ */
+static bool App_EG_Wait_Basic_Refresh(Eg800BasicSnapshot_t *snapshot) {
+    TickType_t start_tick;
+
+    if (snapshot == NULL) {
+        return false;
+    }
+
+    start_tick = xTaskGetTickCount();
+
+    while ((xTaskGetTickCount() - start_tick) < pdMS_TO_TICKS(APP_EG_BASIC_REFRESH_WAIT_MS)) {
+        if (Eg800_Basic_Get_Snapshot(snapshot) != RESULT_SUCCESS) {
+            return false;
+        }
+
+        if (snapshot->refresh_in_progress == false) {
+            return true;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(APP_EG_BASIC_REFRESH_POLL_MS));
+    }
+
+    return false;
+}
+
+/**
+ * @brief 初始化 EG 驱动、Basic 层和 Service 层。
+ */
 void App_EG_Init(void) {
     Drv_EG_Init();
     Eg800_Basic_Init();
@@ -21,7 +73,12 @@ void App_EG_Init(void) {
     
 }
 
+/**
+ * @brief 启动 EG 模块，配置基础功能并逐项查询基础信息。
+ */
 void App_EG_Launch(void) {
+    Eg800AtResult_e result;
+    Eg800BasicSnapshot_t snapshot;
 
     Drv_EG_Power_SW(PWR_ON);
     vTaskDelay(1000);
@@ -29,4 +86,74 @@ void App_EG_Launch(void) {
     Drv_EG_Launch_SW(PWR_ON);
     vTaskDelay(1500);
     Drv_EG_Launch_SW(PWR_OFF);
+
+
+
+    vTaskDelay(7000);
+    result = Eg800_Basic_Set_Echo_Close();
+    if(result != EG800_AT_RESULT_OK) {
+        LOG_ERROR("回显命令失败\r\n");
+    }
+
+    LOG("回显设置完毕");
+
+    // 逐项执行基础接口，单项失败后继续，便于一次启动检查全部结果。
+    result = Eg800_Basic_Set_Urc_Port_Uart1();
+    if (result == EG800_AT_RESULT_OK) {
+        LOG("URC 上报端口设置为 UART1");
+    } else {
+        LOG_ERROR("URC 上报端口设置失败: result=%d", (int)result);
+    }
+
+    result = Eg800_Basic_Set_Ri_Physical();
+    if (result == EG800_AT_RESULT_OK) {
+        LOG("RI 信号已设置为物理引脚输出");
+    } else {
+        LOG_ERROR("RI 信号设置失败: result=%d", (int)result);
+    }
+
+    if (Eg800_Basic_Request_Refresh() != RESULT_SUCCESS) {
+        LOG_ERROR("Basic 基础信息刷新请求失败");
+        return;
+    }
+
+    LOG("Basic 基础信息刷新已请求");
+    if (Eg800_Basic_Get_Snapshot(&snapshot) == RESULT_SUCCESS) {
+        App_EG_Log_Basic_Snapshot("刷新开始", &snapshot);
+    }
+
+    if (App_EG_Wait_Basic_Refresh(&snapshot) == true) {
+        App_EG_Log_Basic_Snapshot("刷新完成", &snapshot);
+    } else {
+        LOG_ERROR("等待 Basic 基础信息刷新完成超时");
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(APP_EG_USER_QUERY_DELAY_MS));
+
+    if (Eg800_Basic_Get_Snapshot(&snapshot) == RESULT_SUCCESS) {
+        App_EG_Log_Basic_Snapshot("20 秒后用户查询 1", &snapshot);
+    }
+
+    if (Eg800_Basic_Get_Snapshot(&snapshot) == RESULT_SUCCESS) {
+        App_EG_Log_Basic_Snapshot("20 秒后用户查询 2", &snapshot);
+    }
+    // 前面已等待 20 秒，再等待 50 秒，验证缓存过期后的刷新。
+    vTaskDelay(pdMS_TO_TICKS(50000U));
+
+    if (Eg800_Basic_Get_Snapshot(&snapshot) == RESULT_SUCCESS) {
+        App_EG_Log_Basic_Snapshot("70 秒后用户查询", &snapshot);
+
+        // 获取接口立即返回，等待本轮后台刷新结束后再查看新数据。
+        if (App_EG_Wait_Basic_Refresh(&snapshot) == true) {
+            App_EG_Log_Basic_Snapshot("70 秒触发的刷新已结束", &snapshot);
+        } else {
+            LOG_ERROR("等待 Basic 刷新结束失败或超时");
+        }
+    } else {
+        LOG_ERROR("70 秒后读取 Basic 快照失败");
+    }
 }
+
+
+
+

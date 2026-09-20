@@ -2,8 +2,17 @@
 #define EG_BASIC_H_
 
 
-#include <stdint.h>
+
+#include <stddef.h>
 #include "types.h"
+#include "eg_service.h"
+
+#define EG800_BASIC_TASK_STACK_SIZE           256U // Basic 后台刷新任务栈大小
+#define EG800_BASIC_TASK_PRIORITY             8U   // 低于 EG800 Service 任务优先级
+
+
+
+
 
 
 #define EG800_BASIC_IMEI_SIZE                 24U  // IMEI缓冲区
@@ -12,6 +21,10 @@
 #define EG800_BASIC_PHONE_NUMBER_SIZE         32U  // SIM本机号码缓冲区
 #define EG800_BASIC_OPERATOR_NAME_SIZE        24U  // 运营商名称缓冲区
 #define EG800_BASIC_FIRMWARE_VERSION_SIZE     64U  // 模块固件版本缓冲区
+
+#define EG800_BASIC_REFRESH_INTERVAL_MS       60000U // Basic 信息全量刷新间隔，单位 ms
+
+
 
 
 
@@ -53,13 +66,50 @@ typedef struct {
 } Eg800BasicInfo_t;
 
 
-
+typedef struct {
+    Eg800BasicInfo_t info;                                      // 最近一次成功获得的数据
+    TickType_t update_tick;                                     // 最近一次全量刷新结束的时刻
+    bool refresh_in_progress;                                   // 后台是否正在刷新
+} Eg800BasicSnapshot_t;
 
 
 Result_t Eg800_Basic_Init(void);
 
 
 
+//----------------------------------------------------基础命令封装-------------------------------------------------------------------
+Eg800AtResult_e Eg800_Basic_Set_Echo_Close(void);
+
+Eg800AtResult_e Eg800_Basic_Set_Urc_Port_Uart1(void);
+
+Eg800AtResult_e Eg800_Basic_Set_Ri_Physical(void);
+
+Eg800AtResult_e Eg800_Basic_Query_Sim(Eg800BasicSimState_e *sim_state);
+
+Eg800AtResult_e Eg800_Basic_Query_Signal(uint8_t *csq, uint8_t *ber);
+
+Eg800AtResult_e Eg800_Basic_Query_Imei(char *imei, size_t imei_size);
+
+Eg800AtResult_e Eg800_Basic_Query_Imsi(char *imsi, size_t imsi_size);
+
+Eg800AtResult_e Eg800_Basic_Query_Iccid(char *iccid, size_t iccid_size);
+
+Eg800AtResult_e Eg800_Basic_Query_Phone_Number(char *phone_number, size_t phone_number_size);
+
+Eg800AtResult_e Eg800_Basic_Query_Firmware_Version(char *version, size_t version_size);
+
+Eg800AtResult_e Eg800_Basic_Query_Operator(Eg800BasicOperator_e *operator_type, char *operator_name, size_t operator_name_size);
+
+
+
+
+//---------------------------------------------------------信息查询获取-------------------------------------------
+bool Eg800_Basic_Is_Boot_Ready(void);
+
+void Eg800_Basic_Boot_Ready_Clear(void);
+
+Result_t Eg800_Basic_Get_Snapshot(Eg800BasicSnapshot_t *snapshot);
+Result_t Eg800_Basic_Request_Refresh(void);
 
 
 

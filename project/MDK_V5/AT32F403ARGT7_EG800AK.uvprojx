@@ -703,6 +703,16 @@
               <FileType>5</FileType>
               <FilePath>..\..\Treo\Service\eg_basic.h</FilePath>
             </File>
+            <File>
+              <FileName>eg_network.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Treo\Service\eg_network.c</FilePath>
+            </File>
+            <File>
+              <FileName>eg_network.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\Treo\Service\eg_network.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
