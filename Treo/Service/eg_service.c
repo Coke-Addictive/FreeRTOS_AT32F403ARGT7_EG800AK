@@ -1062,11 +1062,13 @@ Result_t Eg800_Urc_Register_Table(const Eg800UrcRegistration_t *routes, size_t r
 }
 
 /**
- * @brief 执行一条 AT 请求。
- * @param request AT 请求描述。
+ * @brief 将 AT 请求入队，并阻塞等待本次请求完成。
+ * @param request AT 请求描述，其引用的数据必须保持有效直到调用返回。
  * @param result_info 执行结果输出，可为 NULL。
- * @return AT 执行结果。
- * @note 服务层不能调用此接口，否则否则服务任务会等待自己完成请求导致死锁
+ * @param completion_sem 当前调用任务专用的二值信号量，调用期间必须保持有效。
+ * @return AT 执行结果；队列满时返回 EG800_AT_RESULT_QUEUE_FULL。
+ * @note 同一信号量同一时间只允许对应一条未完成请求。
+ * @note 仅供任务上下文调用，禁止在 ISR 或 Service 任务中调用。
  */
 Eg800AtResult_e Eg800_AT_Execute(const Eg800AtRequest_t *request, Eg800AtResultInfo_t *result_info, SemaphoreHandle_t completion_sem) {
     Eg800AtQueueItem_t item;               // 待入队的请求包

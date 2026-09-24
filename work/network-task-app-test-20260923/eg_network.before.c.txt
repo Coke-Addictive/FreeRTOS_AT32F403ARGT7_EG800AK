@@ -702,12 +702,11 @@ Result_t Eg800_Network_Get_Snapshot(Eg800NetworkSnapshot_t *snapshot) {
 /**
  * @brief 初始化 Network 维护信息，并接收上层控制请求。
  * @param argument 任务创建参数，当前未使用。
- * @note 已接入单次联网、PDP 清理和有限次数的定时重试，掉线恢复后续加入。
+ * @note 当前阶段已接入单次联网和 PDP 清理，定时重试及掉线恢复后续加入。
  */
 static void Eg800_Network_Task(void *argument) {
     Eg800AtResult_e result;
     Eg800AtResult_e cleanup_result;
-    UBaseType_t stack_free_words;
     uint32_t events;
     BaseType_t wait_result;
     TickType_t wait_ticks = portMAX_DELAY;
@@ -763,7 +762,6 @@ static void Eg800_Network_Task(void *argument) {
             result = Eg800_Network_Deactivate_PDP(EG800_NETWORK_CONTEXT_ID, s_network_at_completion_sem);
 
             if (result == EG800_AT_RESULT_OK) {
-                s_eg800_network_retry_count = 0U;
                 network_info.state = EG800_NETWORK_STATE_IDLE;
                 LOG("Network PDP 清理成功");
             } else {
@@ -846,10 +844,6 @@ static void Eg800_Network_Task(void *argument) {
             LOG("Network 开始第 %u/%u 次联网", (unsigned int)s_eg800_network_retry_count, (unsigned int)EG800_NETWORK_RETRY_MAX);
 
             result = Eg800_Network_Connect_Once(&network_info);
-
-            // 单次联网已迁入 Network 任务，在实际调用返回后记录该任务的栈余量。
-            stack_free_words = uxTaskGetStackHighWaterMark(NULL);
-            LOG("Network 栈最小剩余: %lu words (%lu bytes)", (unsigned long)stack_free_words, (unsigned long)(stack_free_words * sizeof(StackType_t)));
 
             // 联网意图检查与成功快照发布一起完成，避免中间插入断网请求。
             taskENTER_CRITICAL();

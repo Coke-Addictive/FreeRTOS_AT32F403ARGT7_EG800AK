@@ -334,9 +334,6 @@ void USART3_IRQHandler(void)
     /* add user code begin USART3_USART_NERR_FLAG, USART_ROERR_FLAG or USART_FERR_FLAG */
     /* clear flag */
     usart_flag_clear(USART3, USART_NERR_FLAG | USART_ROERR_FLAG | USART_FERR_FLAG);
-
-    // 串口错误
-    Drv_EG_USART_Error_IRQHandler();
     /* add user code end  USART3_USART_NERR_FLAG, USART_ROERR_FLAG or USART_FERR_FLAG */ 
   }
 

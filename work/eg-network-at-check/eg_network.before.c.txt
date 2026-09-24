@@ -1,0 +1,289 @@
+#include "eg_network.h"
+
+#define LOG_TAG "EG_NET"
+#include "log.h"
+
+#define EG800_NETWORK_CONFIG_TIMEOUT_MS             5000U               // QICSGP配置超时
+#define EG800_NETWORK_ACTIVATE_TIMEOUT_MS           60000U              // QIACT激活超时
+#define EG800_NETWORK_QUERY_TIMEOUT_MS              5000U               // QIACT查询超时
+#define EG800_NETWORK_DEACTIVATE_TIMEOUT_MS         40000U              // QIDEACT去激活超时
+
+// Network层内部AT命令编号
+typedef enum {
+    EG800_NETWORK_CMD_QICSGP = 0U,              // 配置PDP场景和APN
+    EG800_NETWORK_CMD_QIACT,                    // 激活PDP场景
+    EG800_NETWORK_CMD_QIACT_QUERY,              // 查询PDP场景状态和IP
+    EG800_NETWORK_CMD_QIDEACT                   // 去激活PDP场景
+} Eg800NetworkCmd_e;
+
+// 单个运营商对应的APN配置
+typedef struct {
+    Eg800BasicOperator_e operator_type;         // 运营商类型
+    const char *apn;                            // 运营商对应的APN
+    uint8_t auth_type;                          // QICSGP鉴权方式
+} Eg800NetworkApnConfig_t;
+
+static TaskHandle_t s_eg800_network_task_handle = NULL;                 // 任务句柄
+
+static bool s_eg800_network_initialized = false;                        // 初始化标志位
+
+static bool s_eg800_network_should_connect = false;                     // 上层是否希望网络保持连接（目标状态）
+
+static uint8_t s_eg800_network_retry_count = 0U;                        // 当前联网流程已经尝试的次数
+
+static Eg800NetworkSnapshot_t s_eg800_network_snapshot = {0};           // Network 信息缓存及刷新状态
+
+static SemaphoreHandle_t s_network_at_completion_sem = NULL;            // Network 层 AT 请求完成信号量
+
+// 实际处理URC的函数声明
+static void Eg800_Network_TCPIP_Urc_Handler(const char *line);
+
+// 路由表需要在声明之后
+static const Eg800UrcRegistration_t s_eg800_network_urc_routes[] = {
+    {"+QIURC:", EG800_AT_OWNER_NETWORK, Eg800_Network_TCPIP_Urc_Handler},
+};
+
+// 当前支持的运营商APN表
+static const Eg800NetworkApnConfig_t s_eg800_network_apn_configs[] = {
+    {EG800_BASIC_OPERATOR_CHINA_MOBILE, "CMNET", 0U},
+    {EG800_BASIC_OPERATOR_CHINA_TELECOM, "CTNET", 0U},
+    {EG800_BASIC_OPERATOR_CHINA_UNICOM, "UNINET", 0U}
+};
+
+// ------------------------------------------------- 函数声明 -----------------------------------------------------
+// URC 注册
+static Result_t Eg800_Network_Register_Urcs(void);
+
+//
+static void Eg800_Network_Info_Reset(void);
+
+// 核心任务
+static void Eg800_Network_Task(void *argument);
+
+//--------------------------------------------------------URC 处理-----------------------------------------
+static void Eg800_Network_TCPIP_Urc_Handler(const char *line) {
+    LOG_ERROR("%s", line);
+    LOG("收到PDP去激活通知或者说是断网通知");
+}
+
+//--------------------------------------------------------关键函数实体-----------------------------------------
+/**
+ * @brief 将 Network 层保存的信息恢复为未知状态。
+ */
+static void Eg800_Network_Info_Reset(void) {
+    (void)memset(&s_eg800_network_snapshot, 0, sizeof(s_eg800_network_snapshot));
+    s_eg800_network_snapshot.info.state = EG800_NETWORK_STATE_NONE;
+    s_eg800_network_snapshot.info.PDP_ID = EG800_NETWORK_CONTEXT_ID;
+    s_eg800_network_snapshot.info.operator_type = EG800_NETWORK_CONTEXT_TYPE;
+}
+
+/**
+ * @brief 注册 Network 层负责的全部主动上报 URC。
+ * @return RESULT_SUCCESS 表示全部注册成功，RESULT_FAIL 表示存在注册失败。
+ */
+static Result_t Eg800_Network_Register_Urcs(void) {
+    return Eg800_Urc_Register_Table(s_eg800_network_urc_routes, ARRAY_SIZE(s_eg800_network_urc_routes));
+}
+
+
+
+/**
+ * @brief 同步执行一条 Network 服务的普通文本 AT 命令。
+ * @param cmd_id Network 服务内部命令编号。
+ * @param name 命令日志名称，可为 NULL。
+ * @param tx 完整 AT 发送字符串，必须包含 "\r\n"，调用期间保持有效。
+ * @param rsp_prefix 需要保存的响应前缀，NULL 表示保存未被 URC 路由消费的文本。
+ * @param rx_buf 响应接收缓冲区，调用期间保持有效；不需要响应内容时传 NULL。
+ * @param rx_buf_size 响应缓冲区容量，单位字节；rx_buf 为 NULL 时必须为 0。
+ * @param timeout_ms 等待 OK 或 ERROR 的超时时间，单位 ms；0 表示使用 Service 默认值。
+ * @param result_info AT 执行详细结果，可为 NULL。
+ * @param completion_sem 当前调用任务专用的二值信号量，调用期间保持有效。
+ * @return EG800_AT_RESULT_OK 表示命令成功，其他值表示对应的执行错误。
+ * @note Network 和 AT 核心服务应已初始化；仅供任务上下文串行调用。
+ * @note 禁止在 ISR、AT 核心 Service 任务及其 URC 回调中调用。
+ * @note 同一信号量同一时间只允许对应一条未完成请求。
+ */
+static Eg800AtResult_e Eg800_Network_At_Execute(Eg800NetworkCmd_e cmd_id, const char *name, const char *tx, const char *rsp_prefix, char *rx_buf, size_t rx_buf_size, uint32_t timeout_ms, Eg800AtResultInfo_t *result_info, SemaphoreHandle_t completion_sem) {
+    Eg800AtRequest_t request = {0};
+
+    request.cmd.owner = EG800_AT_OWNER_NETWORK;
+    request.cmd.id = (uint8_t)cmd_id;
+    request.flow = EG800_AT_FLOW_TEXT;
+
+    request.name = name;
+    request.tx = tx;
+    request.rsp_prefix = rsp_prefix;
+    request.rx_buf = rx_buf;
+    request.rx_buf_size = rx_buf_size;
+
+    request.final_timeout_ms = timeout_ms;
+
+    return Eg800_AT_Execute(&request, result_info, completion_sem);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//--------------------------------------------------------公开的API接口--------------------------------------------------------
+/**
+ * @brief 初始化 Network 层并注册基础 URC。
+ * @return RESULT_SUCCESS 表示初始化成功。
+ * @note 本函数不发送 AT 命令，可以在模块上电前调用。
+ */
+Result_t Eg800_Network_Init(void) {
+    BaseType_t task_result;
+
+    // 幂等检查
+    if (s_eg800_network_initialized == true) {
+        return RESULT_SUCCESS;
+    }
+
+    Eg800_Network_Info_Reset();
+
+    // 注册URC
+    if (Eg800_Network_Register_Urcs() != RESULT_SUCCESS) {
+        return RESULT_FAIL;
+    }
+
+    // 创建network 信号量
+    s_network_at_completion_sem = xSemaphoreCreateBinary();
+    if (s_network_at_completion_sem == NULL) {
+        LOG_ERROR("Network AT 完成信号量创建失败");
+        return RESULT_FAIL;
+    }
+
+    task_result = xTaskCreate(Eg800_Network_Task,
+                              "EG Network Core Task",
+                              EG800_NETWORK_TASK_STACK_SIZE,
+                              NULL,
+                              EG800_NETWORK_TASK_PRIORITY,
+                              &s_eg800_network_task_handle);
+
+    if (task_result != pdPASS) {
+        s_eg800_network_task_handle = NULL;
+        LOG_ERROR("Network 后台刷新任务创建失败");
+        return RESULT_FAIL;
+    }
+
+    s_eg800_network_initialized = true;
+
+    return RESULT_SUCCESS;
+}
+
+/**
+ * @brief 判断PDP网络当前是否正常可用。
+ * @return true表示PDP已激活并已经获得IP地址。
+ */
+bool Eg800_Network_Is_Active(void) {
+    bool active;
+
+    if (s_eg800_network_initialized == false) {
+        return false;
+    }
+
+    taskENTER_CRITICAL();
+    active = (s_eg800_network_snapshot.info.state == EG800_NETWORK_STATE_ACTIVE ? true : false);
+    taskEXIT_CRITICAL();
+
+    return active;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//-----------------------------------------------网络层核心维护任务-------------------------------------------------------
+
+static void Eg800_Network_Task(void *argument) {
+    uint32_t events;                       // 事件
+    BaseType_t wait_result;                // 等待完成通知时取得的通知结果
+    TickType_t wait_ticks = portMAX_DELAY; // 下一层最多要等多久？
+    bool should_connect;                   // 上层目前是否希望联网
+    bool connect_now;                      // 这一次循环是否需要执行联网？
+    Eg800NetworkInfo_t network_info;       // 当前网络处于哪个阶段
+    (void)argument;
+
+    while (1) {
+        events = 0U;
+        connect_now = false;
+        wait_result = xTaskNotifyWait(0, UINT32_MAX, &events, wait_ticks);
+        if (events & EG800_NETWORK_EVENT_CONNECT) {
+        } else if (events & EG800_NETWORK_EVENT_DISCONNECT) {
+        }
+    }
+}

@@ -5,10 +5,7 @@
 
 #include "eg_service.h"
 
-#include <stdio.h>
-
 #define EG800_BASIC_AT_RESPONSE_MAX_SIZE 128U               //基本AT回复长度最大值
-#define EG800_BASIC_CFUN_TIMEOUT_MS      15000U             // CFUN 命令等待最终响应的超时时间，单位 ms
 
 
 // Basic层内部AT命令编号，用于填充Eg800AtRequest_t.cmd.id
@@ -26,9 +23,7 @@ typedef enum {
     EG800_BASIC_CMD_ICCID,     // 查询 ICCID
     EG800_BASIC_CMD_CNUM,      // 查询本机号码
     EG800_BASIC_CMD_COPS,      // 查询运营商
-    EG800_BASIC_CMD_GMR,       // 查询模块固件版本
-    EG800_BASIC_CMD_CFUN_SET,  // 设置模块功能模式
-    EG800_BASIC_CMD_CFUN_QUERY // 查询模块功能模式
+    EG800_BASIC_CMD_GMR        // 查询模块固件版本
 } Eg800BasicCmd_e;
 
 static bool s_eg800_basic_initialized   = false;    // Basic 层是初始化标志位
@@ -68,14 +63,12 @@ static bool Eg800_Basic_Copy_Quoted_Field(char *dst, size_t dst_size, const char
 static bool Eg800_Basic_Copy_String(char *dst, size_t dst_size, const char *src);
 
 // 处理解析函数
-static bool Eg800_Basic_Parse_CFUN(const char *line, uint8_t *cfun);
 static Eg800BasicSimState_e Eg800_Basic_Parse_Sim_State(const char *line, Eg800AtResult_e result, int16_t module_error);
 static bool Eg800_Basic_Parse_Signal(const char *line, uint8_t *csq, uint8_t *ber);
 static Eg800BasicOperator_e Eg800_Basic_Parse_Operator(const char *operator_name);
 
 // 更新信息数据
 static void Eg800_Basic_Update_String(char *dst, size_t dst_size, const char *src);
-static void Eg800_Basic_Update_CFUN(uint8_t cfun);
 
 // 基础信息维护任务
 static void Eg800_Basic_Task(void *parameters);
@@ -107,20 +100,14 @@ static void Eg800_Basic_Sim_Urc_Handler(const char *line) {
     }
 }
 
-/**
- * @brief 解析功能模式主动上报并更新 Basic 缓存，不执行同步 AT 请求。
- * @param line Service 分发的完整 +CFUN 文本行。
- */
 static void Eg800_Basic_CFUN_Urc_Handler(const char *line) {
-    uint8_t cfun;
-
-    if (Eg800_Basic_Parse_CFUN(line, &cfun) == false) {
-        LOG_WARN("未识别的 CFUN 状态: %s", (line != NULL) ? line : "");
-        return;
+    char temp[10];
+    Eg800_Basic_Copy_After_Colon(temp, sizeof(temp) / sizeof(temp[0]), line);
+    if (temp[0] == '1') {
+        LOG("当前模块ME为全功能模式");
+    } else {
+        LOG_ERROR("未识别");
     }
-
-    Eg800_Basic_Update_CFUN(cfun);
-    LOG("模块功能模式: CFUN=%u", (unsigned int)cfun);
 }
 
 //---------------------------------------------------工具函数------------------------------------------
@@ -461,43 +448,6 @@ static Eg800BasicOperator_e Eg800_Basic_Parse_Operator(const char *operator_name
     return EG800_BASIC_OPERATOR_UNKNOWN;
 }
 
-/**
- * @brief 严格解析一条 +CFUN 响应或主动上报。
- * @param line 完整的 +CFUN 文本，允许值后存在空格、制表符和换行。
- * @param cfun 功能模式输出，仅解析成功时写入 0 或 1。
- * @return true 表示解析成功，false 表示参数无效、格式错误或模式不受当前封装支持。
- */
-static bool Eg800_Basic_Parse_CFUN(const char *line, uint8_t *cfun) {
-    const char *cursor;
-    uint8_t parsed_cfun;
-
-    if ((line == NULL) || (cfun == NULL) || (strncmp(line, "+CFUN:", 6U) != 0)) {
-        return false;
-    }
-
-    cursor = line + 6U;
-    while ((*cursor == ' ') || (*cursor == '\t')) {
-        cursor++;
-    }
-
-    if ((*cursor != '0') && (*cursor != '1')) {
-        return false;
-    }
-    parsed_cfun = (uint8_t)(*cursor - '0');
-    cursor++;
-
-    // 必须消费完整响应，拒绝 10、1,1、附加文本及多条 +CFUN 行。
-    while ((*cursor == ' ') || (*cursor == '\t') || (*cursor == '\r') || (*cursor == '\n')) {
-        cursor++;
-    }
-    if (*cursor != '\0') {
-        return false;
-    }
-
-    *cfun = parsed_cfun;
-    return true;
-}
-
 //--------------------------------------------------------关键函数实体-----------------------------------------
 /**
  * @brief 将 Basic 层保存的信息恢复为未知状态。
@@ -507,7 +457,6 @@ static void Eg800_Basic_Info_Reset(void) {
     s_eg800_basic_snapshot.info.sim_state = EG800_BASIC_SIM_STATE_UNKNOWN;
     s_eg800_basic_snapshot.info.csq = 99U;
     s_eg800_basic_snapshot.info.ber = 99U;
-    s_eg800_basic_snapshot.info.cfun = EG800_BASIC_CFUN_UNKNOWN;
     s_eg800_basic_snapshot.info.operator_type = EG800_BASIC_OPERATOR_UNKNOWN;
 }
 
@@ -545,10 +494,7 @@ static Eg800AtResult_e Eg800_Basic_At_Execute(Eg800BasicCmd_e cmd_id, const char
     request.rx_buf = rx_buf;
     request.rx_buf_size = rx_buf_size;
 
-    // CFUN 功能切换需要更长等待，其余 Basic 命令继续使用 Service 默认超时。
-    if ((cmd_id == EG800_BASIC_CMD_CFUN_SET) || (cmd_id == EG800_BASIC_CMD_CFUN_QUERY)) {
-        request.final_timeout_ms = EG800_BASIC_CFUN_TIMEOUT_MS;
-    }
+    // 超时字段保持为 0，使用 Service 的默认超时时间。
     return Eg800_AT_Execute(&request, result_info, completion_sem);
 }
 
@@ -558,16 +504,6 @@ static Eg800AtResult_e Eg800_Basic_At_Execute(Eg800BasicCmd_e cmd_id, const char
 
 
 //-----------------------------------------------更新信息数据-------------------------------------------------------
-
-/**
- * @brief 在临界区内更新 Basic 缓存中的功能模式。
- * @param cfun 已确认的功能模式，取值 0 或 1。
- */
-static void Eg800_Basic_Update_CFUN(uint8_t cfun) {
-    taskENTER_CRITICAL();
-    s_eg800_basic_snapshot.info.cfun = (Eg800BasicCFUN_e)cfun;
-    taskEXIT_CRITICAL();
-}
 
 /**
  * @brief 在临界区内更新 Basic 信息结构中的字符串字段。
@@ -720,66 +656,23 @@ Eg800AtResult_e Eg800_Basic_Set_Ri_Physical(SemaphoreHandle_t completion_sem) {
 
 
 /**
- * @brief 设置模块功能模式，不携带触发模组复位的 rst 参数。
- * @param cfun 功能模式，0 为最小功能，1 为全功能。
- * @param completion_sem 当前调用任务专用的 AT 完成信号量，同一时间仅供一条请求使用。
- * @return OK 表示设置命令成功；未初始化、参数无效或命令生成失败返回 PARAM_ERROR；其他值为 AT 执行错误。
- * @note 设置成功后更新 CFUN 缓存；不等待 SIM 就绪、网络注册或 PDP 激活，也不执行重试。
- * @note 仅供任务上下文调用，禁止在 Service 任务、URC 回调或 ISR 中调用。
+ * @brief 
+ * @param cfun 
+ * @param completion_sem 
+ * @return 
  */
 Eg800AtResult_e Eg800_Basic_Set_CFUN(uint8_t cfun, SemaphoreHandle_t completion_sem) {
-    char command[16];
-    int command_len;
-    Eg800AtResult_e result;
-
-    if ((s_eg800_basic_initialized == false) || (completion_sem == NULL) || ((cfun != EG800_BASIC_CFUN_MIN_MODE) && (cfun != EG800_BASIC_CFUN_FULL_MODE))) {
-        return EG800_AT_RESULT_PARAM_ERROR;
-    }
-
-    command_len = snprintf(command, sizeof(command), "AT+CFUN=%u\r\n", (unsigned int)cfun);
-    if ((command_len <= 0) || ((size_t)command_len >= sizeof(command))) {
-        return EG800_AT_RESULT_PARAM_ERROR;
-    }
-
-    result = Eg800_Basic_At_Execute(EG800_BASIC_CMD_CFUN_SET, "设置功能模式", command, NULL, NULL, 0U, NULL, completion_sem);
-    if (result == EG800_AT_RESULT_OK) {
-        Eg800_Basic_Update_CFUN(cfun);
-    }
-    return result;
+    return 0;
 }
 
 /**
- * @brief 查询模块功能模式，成功后更新 Basic 缓存。
- * @param cfun 功能模式输出；参数检查通过后先置为 UNKNOWN，成功时写入 0 或 1。
- * @param completion_sem 当前调用任务专用的 AT 完成信号量，同一时间仅供一条请求使用。
- * @return OK 表示查询及解析成功；未初始化或参数无效返回 PARAM_ERROR；响应截断、格式错误或模式不受支持返回 DATA_FAIL；AT 失败时返回原错误码。
- * @note 仅供任务上下文调用，禁止在 Service 任务、URC 回调或 ISR 中调用。
+ * @brief 
+ * @param cfun 
+ * @param completion_sem 
+ * @return 
  */
 Eg800AtResult_e Eg800_Basic_Query_CFUN(uint8_t *cfun, SemaphoreHandle_t completion_sem) {
-    char response[32] = {0};
-    uint8_t parsed_cfun;
-    Eg800AtResultInfo_t result_info = {0};
-    Eg800AtResult_e result;
-
-    if ((s_eg800_basic_initialized == false) || (cfun == NULL) || (completion_sem == NULL)) {
-        return EG800_AT_RESULT_PARAM_ERROR;
-    }
-
-    *cfun = EG800_BASIC_CFUN_UNKNOWN;
-    // 显式指定响应前缀，使 Service 保存查询回复，不将其当作普通 CFUN URC 消费。
-    result = Eg800_Basic_At_Execute(EG800_BASIC_CMD_CFUN_QUERY, "查询功能模式", "AT+CFUN?\r\n", "+CFUN:", response, sizeof(response), &result_info, completion_sem);
-    if (result != EG800_AT_RESULT_OK) {
-        return result;
-    }
-
-    if ((result_info.rx_len >= (sizeof(response) - 1U)) || (Eg800_Basic_Parse_CFUN(response, &parsed_cfun) == false)) {
-        LOG_WARN("未识别的 CFUN 状态: %s", response);
-        return EG800_AT_RESULT_DATA_FAIL;
-    }
-
-    *cfun = parsed_cfun;
-    Eg800_Basic_Update_CFUN(parsed_cfun);
-    return EG800_AT_RESULT_OK;
+    return 0;
 }
 
 

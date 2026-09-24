@@ -100,6 +100,7 @@ int main(void)
   /* init gpio function. */
   wk_gpio_config();
 
+  /* uart4 already supports printf. */
   /* init uart4 function. */
   wk_uart4_init();
 

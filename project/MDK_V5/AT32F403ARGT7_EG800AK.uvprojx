@@ -713,6 +713,46 @@
               <FileType>5</FileType>
               <FilePath>..\..\Treo\Service\eg_network.h</FilePath>
             </File>
+            <File>
+              <FileName>eg_mqtt.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Treo\Service\eg_mqtt.c</FilePath>
+            </File>
+            <File>
+              <FileName>eg_mqtt.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\Treo\Service\eg_mqtt.h</FilePath>
+            </File>
+            <File>
+              <FileName>eg_http.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Treo\Service\eg_http.c</FilePath>
+            </File>
+            <File>
+              <FileName>eg_http.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\Treo\Service\eg_http.h</FilePath>
+            </File>
+            <File>
+              <FileName>eg_gnss.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Treo\Service\eg_gnss.c</FilePath>
+            </File>
+            <File>
+              <FileName>eg_gnss.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\Treo\Service\eg_gnss.h</FilePath>
+            </File>
+            <File>
+              <FileName>eg_timer.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Treo\Service\eg_timer.c</FilePath>
+            </File>
+            <File>
+              <FileName>eg_timer.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\Treo\Service\eg_timer.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

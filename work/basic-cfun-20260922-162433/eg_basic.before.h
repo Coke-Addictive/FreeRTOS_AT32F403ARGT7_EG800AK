@@ -51,7 +51,6 @@ typedef enum {
 typedef enum {
     EG800_BASIC_CFUN_MIN_MODE = 0,          // 最小功能模式
     EG800_BASIC_CFUN_FULL_MODE,             // 全功能模式
-    EG800_BASIC_CFUN_UNKNOWN = 0xFFU        // 尚未获得有效的功能模式
 }Eg800BasicCFUN_e;
 
 
