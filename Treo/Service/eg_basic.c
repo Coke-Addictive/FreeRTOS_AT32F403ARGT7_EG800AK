@@ -7,8 +7,8 @@
 
 #include <stdio.h>
 
-#define EG800_BASIC_AT_RESPONSE_MAX_SIZE 128U               //基本AT回复长度最大值
-#define EG800_BASIC_CFUN_TIMEOUT_MS      15000U             // CFUN 命令等待最终响应的超时时间，单位 ms
+#define EG800_BASIC_AT_RESPONSE_MAX_SIZE        128U               //基本AT回复长度最大值
+#define EG800_BASIC_CFUN_TIMEOUT_MS             15000U             // CFUN 命令等待最终响应的超时时间，单位 ms
 
 
 // Basic层内部AT命令编号，用于填充Eg800AtRequest_t.cmd.id
@@ -712,6 +712,13 @@ Eg800AtResult_e Eg800_Basic_Set_Echo_Close(SemaphoreHandle_t completion_sem) {
 Eg800AtResult_e Eg800_Basic_Set_Urc_Port_Uart1(SemaphoreHandle_t completion_sem) {
     return Eg800_Basic_At_Execute(EG800_BASIC_CMD_URC_PORT, "设置 URC 上报口为 UART1", "AT+QURCCFG=\"urcport\",\"uart1\"\r\n", NULL, NULL, 0U, NULL, completion_sem);
 }
+
+//[TODO]:AT+QINDCFG="all",1,1       // 打开全量指示上报  （这个是什么AT指令？？？）
+//[TODO]:AT+QCFG="urcdelay",150 设置RI 脉冲到 URC 输出延时 150ms
+//[TODO]: AT+QCFG="urc/ri/other","pulse",500,1
+//[TODO]:AT+QSCLK=0                        │ 冷启动阶段禁止模块睡眠  还得有一个允许睡眠的AT指令
+//[TODO]:AT+QPOWD=1             正常关机
+
 
 // 将 RI 信号类型设置为物理引脚输出。
 Eg800AtResult_e Eg800_Basic_Set_Ri_Physical(SemaphoreHandle_t completion_sem) {

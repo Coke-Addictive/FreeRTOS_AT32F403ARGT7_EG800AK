@@ -4,6 +4,7 @@
 #include "eg_service.h"
 #include "eg_basic.h"
 #include "eg_network.h"
+#include "eg_locate.h"
 
 
 #include "FreeRTOS.h"
@@ -38,6 +39,8 @@ static void App_EG_Log_Basic_Snapshot(const char *stage, const Eg800BasicSnapsho
     LOG("Basic 标识[%s]: IMEI=%s, IMSI=%s, ICCID=%s", stage, snapshot->info.imei, snapshot->info.imsi, snapshot->info.iccid);
     LOG("Basic 其他[%s]: phone=%s, operator=%s, firmware=%s", stage, snapshot->info.phone_number, snapshot->info.operator_name, snapshot->info.firmware_version);
 }
+
+
 
 /**
  * @brief 等待 Basic 后台全量刷新结束。
@@ -125,12 +128,15 @@ void App_EG_Init(void) {
     Drv_EG_Init();
     Eg800_Basic_Init();
     Eg800_Service_Init();
+
     if (Eg800_Network_Init() != RESULT_SUCCESS) {
         LOG_ERROR("Network 初始化失败");
     }
 
+    if (Eg800_Locate_Init() != RESULT_SUCCESS) {
+        LOG_ERROR("Locate 初始化失败");
+    }
 
-    
 }
 
 /**
@@ -170,6 +176,7 @@ void App_EG_Launch(void) {
     }
 
     LOG("回显设置完毕");
+#if 0
 
     // 逐项执行基础接口，单项失败后继续，便于一次启动检查全部结果。
     result = Eg800_Basic_Set_Urc_Port_Uart1(s_system_main_at_completion_sem);
@@ -275,7 +282,31 @@ void App_EG_Launch(void) {
     } else {
         LOG_ERROR("[NET_TEST] 联网测试未通过，已完成断网清理");
     }
+#endif
+    LOG("测试开始");
+    Eg800_Locate_Test();
+
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -22,7 +22,10 @@
 
 #define EG800_NETWORK_EVENT_CONNECT             (1UL << 0)      // 请求建立连接并维持PDP网络
 #define EG800_NETWORK_EVENT_DISCONNECT          (1UL << 1)      // 请求停止重连并断开PDP
-#define EG800_NETWORK_EVENT_PDP_DEACT           (1UL << 2)      // 收到PDP异常断开URC
+#define EG800_NETWORK_EVENT_PDP_DEACT           (1UL << 2)      // 收到 PDP 异常断开 URC，处理分支尚未完成
+
+// TODO: 下一步优先补掉线闭环：识别目标 PDP 的掉线 URC → 通知 Network 任务 → 清除旧 IP、退出 ACTIVE → 根据联网意图决定重连；随后验证失败重试、取消和 FAULT 分支。
+// 该项需配合实体拔卡测试，暂缓实现和验证；当前下一步先开展 MQTT 开发。
 
 
 
