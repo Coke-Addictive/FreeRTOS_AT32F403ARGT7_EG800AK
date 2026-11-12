@@ -21,7 +21,7 @@
 
 /* 调用者可以为每条请求指定超时，但服务层会限制在以下最大值内 */
 #define EG800_AT_MAX_FINAL_TIMEOUT_MS               60000U                  // 单次最大等待 OK/ERROR 的超时时间
-#define EG800_AT_MAX_URC_TIMEOUT_MS                 130000U                 // 单次最大等待异步 URC 的超时时间
+#define EG800_AT_MAX_URC_TIMEOUT_MS                 665000U                 // 覆盖 MQTT 报文超时 60 s、重传 10 次及 5 s 余量，单位 ms
 #define EG800_AT_MAX_DATA_TIMEOUT_MS                120000U                 // 单次等待原始二进制数据的最大超时时间
 
 
@@ -30,7 +30,7 @@
 
 
 
-#define EG800_AT_SYNC_MAX_WAIT_MS                   300000U                 // Eg800_AT_Execute成功入队后，等待整条请求完成的最大全局保护时间
+#define EG800_AT_SYNC_MAX_WAIT_MS                   300000U                 // 同步等待的基础保护时间；在途请求预算更长时自动延长，单位 ms
 
 
 
@@ -85,6 +85,9 @@ typedef struct {
 // URC处理函数
 typedef void (*Eg800AtUrcHandler_t)(const char *line);                          
 
+// 结果 URC 筛选函数：true 表示本次请求的最终结果，false 表示继续等待；在 Service 任务内执行，禁止阻塞。
+typedef bool (*Eg800AtUrcMatch_t)(const char *line, const void *context);
+
 // 模块提交给 Service 的 URC 注册项
 typedef struct {
     const char *prefix;                 // URC 匹配前缀，字符串必须长期有效
@@ -110,7 +113,7 @@ typedef struct {
 
 
 
-// AT 请求结构体（调用者填写该结构体后传给Eg800_AT_Execute）
+// AT 请求结构体（调用者必须先清零，再填写需要的字段并传给 Eg800_AT_Execute）
 typedef struct {
     Eg800AtCmd_t cmd;                    // 逻辑命令编号
     Eg800AtFlow_e flow;                  // 采用的AT通信流程
@@ -136,6 +139,8 @@ typedef struct {
     size_t raw_buf_size;                 // 调用者提供的用于保存模块返回原始数据的缓冲区大小
     size_t raw_expect_len;               // 期望接收的原始数据长度(raw_expect_len：> 0 且 <= raw_buf_size 且 <= EG800_AT_MAX_RAW_SIZE)
     bool allow_during_shutdown;          // Service停止接收普通请求时，是否仍允许执行该请求(一般命令为false,关机、断开网络等收尾命令可设为true，当前为预留)
+    Eg800AtUrcMatch_t expect_urc_match;   // 可选的结果筛选函数，NULL 表示仅按 expect_urc_prefix 完成请求
+    const void *expect_urc_context;      // 筛选函数的上下文，引用对象必须保持有效直到同步调用返回
 } Eg800AtRequest_t;
 
 

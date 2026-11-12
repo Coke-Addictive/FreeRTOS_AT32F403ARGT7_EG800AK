@@ -5,6 +5,7 @@
 #include "eg_basic.h"
 #include "eg_network.h"
 #include "eg_locate.h"
+#include "eg_mqtt.h"
 
 
 #include "FreeRTOS.h"
@@ -176,7 +177,7 @@ void App_EG_Launch(void) {
     }
 
     LOG("回显设置完毕");
-#if 0
+
 
     // 逐项执行基础接口，单项失败后继续，便于一次启动检查全部结果。
     result = Eg800_Basic_Set_Urc_Port_Uart1(s_system_main_at_completion_sem);
@@ -260,31 +261,51 @@ void App_EG_Launch(void) {
         }
     }
 
-    // 正常联网后测试主动断网；观察超时或结果无效时也关闭意图，避免测试退出后继续重试。
-    LOG("[NET_TEST] 3/4 提交 Network 断网请求");
-    if (Eg800_Network_Disconnect() != RESULT_SUCCESS) {
-        LOG_ERROR("[NET_TEST] Network 断网请求提交失败");
-        return;
-    }
+    // // 正常联网后测试主动断网；观察超时或结果无效时也关闭意图，避免测试退出后继续重试。
+    // LOG("[NET_TEST] 3/4 提交 Network 断网请求");
+    // if (Eg800_Network_Disconnect() != RESULT_SUCCESS) {
+    //     LOG_ERROR("[NET_TEST] Network 断网请求提交失败");
+    //     return;
+    // }
 
-    LOG("[NET_TEST] 4/4 请求已提交，等待 IDLE");
-    if (App_EG_Wait_Network_State(EG800_NETWORK_STATE_IDLE, APP_EG_NETWORK_DISCONNECT_WAIT_MS, &network_snapshot) == false) {
-        return;
-    }
+    // LOG("[NET_TEST] 4/4 请求已提交，等待 IDLE");
+    // if (App_EG_Wait_Network_State(EG800_NETWORK_STATE_IDLE, APP_EG_NETWORK_DISCONNECT_WAIT_MS, &network_snapshot) == false) {
+    //     return;
+    // }
 
-    if ((Eg800_Network_Is_Active() == true) || (network_snapshot.info.ip_addr[0] != '\0')) {
-        LOG_ERROR("[NET_TEST] 断网结果检查失败：活动标志或 IP 尚未清除");
-        return;
-    }
+    // if ((Eg800_Network_Is_Active() == true) || (network_snapshot.info.ip_addr[0] != '\0')) {
+    //     LOG_ERROR("[NET_TEST] 断网结果检查失败：活动标志或 IP 尚未清除");
+    //     return;
+    // }
 
-    if (network_connected == true) {
-        LOG("[NET_TEST] 测试通过：Connect、ACTIVE 快照、Disconnect、IDLE 快照检查通过，当前保持断开");
-    } else {
-        LOG_ERROR("[NET_TEST] 联网测试未通过，已完成断网清理");
-    }
-#endif
+    // if (network_connected == true) {
+    //     LOG("[NET_TEST] 测试通过：Connect、ACTIVE 快照、Disconnect、IDLE 快照检查通过，当前保持断开");
+    // } else {
+    //     LOG_ERROR("[NET_TEST] 联网测试未通过，已完成断网清理");
+    // }
+
+#if 0
     LOG("测试开始");
     Eg800_Locate_Test();
+#endif
+    if (Eg800_Mqtt_Init() != RESULT_SUCCESS) {
+        LOG_ERROR("MQTT 初始化失败");
+    }
+
+
+    result = Eg800_Mqtt_Set_Version(EG800_MQTT_VERSION, s_system_main_at_completion_sem);
+    if (result != EG800_AT_RESULT_OK) {
+        LOG_ERROR("MQTT 版本设置失败: result=%d", (int)result);
+    } else {
+        LOG("MQTT 版本设置成功");
+    }
+    
+    result = Eg800_Mqtt_Set_PDP_Context(EG800_NETWORK_CONTEXT_ID, s_system_main_at_completion_sem);
+    if (result != EG800_AT_RESULT_OK) {
+        LOG_ERROR("MQTT PDP 配置失败: result=%d", (int)result);
+    } else {
+        LOG("MQTT PDP 配置成功");
+    }
 
 }
 

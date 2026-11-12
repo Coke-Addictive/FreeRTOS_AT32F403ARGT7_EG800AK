@@ -27,11 +27,13 @@ typedef struct {
     Eg800AtResultInfo_t *result_info; // 调用者的结果输出
     TaskHandle_t notify_task;         // 调用者的任务句柄
     SemaphoreHandle_t completion_sem; // 调用者提供的完成信号量
+    uint32_t wait_budget_ms;          // 本请求全部等待阶段及调度余量的预算，单位 ms
 } Eg800AtQueueItem_t;
 
 // FreeRTOS 资源
 static TaskHandle_t s_eg800_service_task_handle = NULL; // 任务句柄
 static QueueHandle_t s_eg800_at_queue = NULL;           // 队列句柄
+static uint32_t s_eg800_pending_wait_budget_ms = 0U;    // 当前请求及排队请求的等待预算总和，单位 ms
 
 static uint8_t s_eg800_rx_chunk[EG800_SERVICE_RX_CHUNK_SIZE]; // 单次读取底层 RX 环形缓冲区的临时缓冲区
 static char s_eg800_line_buf[EG800_SERVICE_LINE_BUF_SIZE];    // AT 文本行缓冲区
@@ -55,6 +57,7 @@ static Eg800UrcRegistration_t s_eg800_urc_routes[EG800_SERVICE_URC_ROUTE_MAX];
 static uint32_t Eg800_Get_Final_Timeout_Ms(const Eg800AtRequest_t *request);
 static uint32_t Eg800_Get_Urc_Timeout_Ms(const Eg800AtRequest_t *request);
 static uint32_t Eg800_Get_Data_Timeout_Ms(const Eg800AtRequest_t *request);
+static uint32_t Eg800_Get_Request_Wait_Budget_Ms(const Eg800AtRequest_t *request);
 
 // 辅助工具
 static const char *Eg800_Get_Prompt_Prefix(const Eg800AtRequest_t *request);
@@ -149,6 +152,29 @@ static uint32_t Eg800_Get_Data_Timeout_Ms(const Eg800AtRequest_t *request) {
     }
 
     return EG800_AT_DEFAULT_DATA_TIMEOUT_MS;
+}
+
+/**
+ * @brief 计算一条请求可能占用 Service 的最长等待预算。
+ * @param request 已通过参数校验的 AT 请求。
+ * @return 包含提示符、终止行、原始数据、结果 URC 及调度余量的总时间，单位 ms。
+ */
+static uint32_t Eg800_Get_Request_Wait_Budget_Ms(const Eg800AtRequest_t *request) {
+    uint32_t budget_ms = Eg800_Get_Final_Timeout_Ms(request);
+
+    if ((request->flow == EG800_AT_FLOW_SEND_DATA) || (request->flow == EG800_AT_FLOW_RECV_RAW)) {
+        budget_ms += Eg800_Get_Final_Timeout_Ms(request);
+    }
+    if (request->flow == EG800_AT_FLOW_RECV_RAW) {
+        budget_ms += Eg800_Get_Data_Timeout_Ms(request);
+    }
+    if ((request->flow == EG800_AT_FLOW_TEXT_URC) ||
+        (((request->flow == EG800_AT_FLOW_SEND_DATA) || (request->flow == EG800_AT_FLOW_RECV_RAW)) &&
+         (request->expect_urc_prefix != NULL) && (request->expect_urc_prefix[0] != '\0'))) {
+        budget_ms += Eg800_Get_Urc_Timeout_Ms(request);
+    }
+
+    return budget_ms + (5U * EG800_SERVICE_EVENT_WAIT_MS);
 }
 
 // ------------------------------------------------------辅助工具类函数---------------------------------------------------
@@ -421,6 +447,11 @@ static void Eg800_Queue_Item_Complete(Eg800AtQueueItem_t *item, Eg800AtResult_e 
         item->result_info->cmd = item->request.cmd;
         item->result_info->module_error = module_error;
     }
+
+    taskENTER_CRITICAL();
+    s_eg800_pending_wait_budget_ms -= item->wait_budget_ms;
+    item->wait_budget_ms = 0U;
+    taskEXIT_CRITICAL();
 
     // 通知提交该AT请求的任务
     if (item->completion_sem != NULL) {
@@ -734,7 +765,8 @@ static void Eg800_Handle_Line(const char *line) {
 
     // 已收到OK，继续等待当前请求指定的异步URC
     if (s_eg800_at_state == EG800_AT_STATE_WAIT_URC) {
-        if ((request->expect_urc_prefix != NULL) && (Eg800_Starts_With(line, request->expect_urc_prefix) == true)) {
+        if ((request->expect_urc_prefix != NULL) && (Eg800_Starts_With(line, request->expect_urc_prefix) == true) &&
+            ((request->expect_urc_match == NULL) || (request->expect_urc_match(line, request->expect_urc_context) == true))) {
             LOG("收到期望URC: %s", line);
 
             Eg800_Request_Append_Rx(line);
@@ -1076,6 +1108,9 @@ Eg800AtResult_e Eg800_AT_Execute(const Eg800AtRequest_t *request, Eg800AtResultI
     Eg800AtResultInfo_t *out_info;         // 实际使用的结果指针（二选一，指向调用者result_info的或者临时的local_result_info）
     TaskHandle_t caller_task;              // 调用此函数的任务句柄，用于检查是否为 Service 自身，并指定请求完成后通知谁
     BaseType_t wait_result;                // 等待完成通知时取得的通知结果
+    BaseType_t queue_result;               // 请求入队结果
+    uint32_t sync_wait_ms;                 // 包含前序排队请求预算的本次同步保护时间，单位 ms
+    TickType_t sync_wait_ticks;            // 使用 64 位中间值换算后的同步保护时长，单位 tick
 
     /* 调用者不需要详细结果时，使用函数内部的临时结果对象 */
     out_info = (result_info != NULL) ? result_info : &local_result_info;
@@ -1104,12 +1139,22 @@ Eg800AtResult_e Eg800_AT_Execute(const Eg800AtRequest_t *request, Eg800AtResultI
     item.result_info = out_info;
     item.notify_task = caller_task;
     item.completion_sem = completion_sem;
+    item.wait_budget_ms = Eg800_Get_Request_Wait_Budget_Ms(request);
 
     // 清除本次调用使用的完成信号量中残留的旧信号
     (void)xSemaphoreTake(completion_sem, 0U);
 
+    // 入队与预算登记必须一起完成，防止高优先级 Service 在登记之前完成请求。
+    taskENTER_CRITICAL();
+    queue_result = xQueueSend(s_eg800_at_queue, &item, 0U);
+    if (queue_result == pdPASS) {
+        s_eg800_pending_wait_budget_ms += item.wait_budget_ms;
+    }
+    sync_wait_ms = VALUE_MAX(EG800_AT_SYNC_MAX_WAIT_MS, s_eg800_pending_wait_budget_ms);
+    taskEXIT_CRITICAL();
+
     /* 队列已满时立即返回，不在这里阻塞等待队列空间 */
-    if (xQueueSend(s_eg800_at_queue, &item, 0U) != pdPASS) {
+    if (queue_result != pdPASS) {
         LOG_ERROR("AT发送队列以及满了,该条丢弃");
         out_info->result = EG800_AT_RESULT_QUEUE_FULL;
         return EG800_AT_RESULT_QUEUE_FULL;
@@ -1117,10 +1162,12 @@ Eg800AtResult_e Eg800_AT_Execute(const Eg800AtRequest_t *request, Eg800AtResultI
 
     xTaskNotifyGive(s_eg800_service_task_handle); // 通知核心Service服务
 
-    wait_result  = xSemaphoreTake(completion_sem, pdMS_TO_TICKS(EG800_AT_SYNC_MAX_WAIT_MS));
+    // 多条长请求的累计预算可能超过 32 位毫秒乘节拍频率的范围，避免换算后提前超时。
+    sync_wait_ticks = (TickType_t)((((uint64_t)sync_wait_ms * (uint64_t)configTICK_RATE_HZ) + 999U) / 1000U);
+    wait_result = xSemaphoreTake(completion_sem, sync_wait_ticks);
     if (wait_result != pdTRUE) {
-        // 这 xxx 秒包括：请求在队列中等待，+ AT 命令执行，+ 等待响应/URC/数据。走到这里通常说明服务任务卡住状态机异常或请求没有被正确完成
-        LOG_ERROR("EG AT等待超过%u毫秒，系统即将复位，命令：%s\r\n", (unsigned int)EG800_AT_SYNC_MAX_WAIT_MS, (request->name != NULL) ? request->name : "-");
+        // 保护时间已覆盖本次请求和前序请求，不能因合法的长 MQTT 等待或排队而提前复位。
+        LOG_ERROR("EG AT等待超过%lu毫秒，系统即将复位，命令：%s\r\n", (unsigned long)sync_wait_ms, (request->name != NULL) ? request->name : "-");
         out_info->result = EG800_AT_RESULT_TIMEOUT;
         NVIC_SystemReset();
     }
