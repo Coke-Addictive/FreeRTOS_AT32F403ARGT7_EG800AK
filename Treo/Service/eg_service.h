@@ -43,6 +43,7 @@ typedef enum {
     EG800_AT_OWNER_MQTT,                        // MQTT 通讯
     EG800_AT_OWNER_HTTP,                        // HTTP 请求/下载
     EG800_AT_OWNER_LOCATION,                    // 定位服务（BDS、LBS、WIFI_SCAN）
+    EG800_AT_OWNER_TIMER,                       // 网络时间同步/模块时钟
     EG800_AT_OWNER_SYSTEM                       // 模块系统事件
 } EG800AtOwner_e;
 

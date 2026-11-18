@@ -74,8 +74,36 @@ static void Eg800_Network_Task(void *argument);
 
 //--------------------------------------------------------URC 处理-----------------------------------------
 static void Eg800_Network_TCPIP_Urc_Handler(const char *line) {
-    LOG_ERROR("%s", line);
-    LOG("收到PDP去激活通知或者说是断网通知");
+    unsigned int context_id = 0U;
+    int parsed_len = 0;
+    if (line == NULL) {
+        return;
+    }
+
+    // LOG_ERROR("%s", line);
+
+    // 识别 PDP 去激活通知，并检查整行格式。
+    if ((sscanf(line, "+QIURC: \"pdpdeact\" , %2u %n", &context_id, &parsed_len) != 1) ||
+        (parsed_len == 0) || (line[parsed_len] != '\0')) {
+        LOG("暂未处理的 TCP/IP URC: %s", line);
+        return;
+    }
+
+    // 只处理当前使用的 PDP 场景（手册规定 PDP 场景 ID 范围为 1~15）
+    if (context_id != EG800_NETWORK_CONTEXT_ID) {
+        LOG("忽略其他 PDP 去激活通知: context_id=%u", context_id);
+        return;
+    }
+
+    LOG_WARN("收到目标 PDP 去激活通知: context_id=%u", context_id);
+
+    // 确认 Network 任务已经创建。
+    if (s_eg800_network_task_handle == NULL) {
+        LOG_ERROR("Network 任务未创建");
+        return;
+    }
+    // 通知 Network 任务：目标 PDP 已掉线。
+    (void)xTaskNotify(s_eg800_network_task_handle, EG800_NETWORK_EVENT_PDP_DEACT, eSetBits);
 }
 
 //--------------------------------------------------------关键函数实体-----------------------------------------
@@ -702,20 +730,21 @@ Result_t Eg800_Network_Get_Snapshot(Eg800NetworkSnapshot_t *snapshot) {
 /**
  * @brief 初始化 Network 维护信息，并接收上层控制请求。
  * @param argument 任务创建参数，当前未使用。
- * @note 已接入单次联网、PDP 清理和有限次数的定时重试，掉线恢复后续加入。
+ * @note 已接入单次联网、PDP 清理和有限次数的定时重试
  */
 static void Eg800_Network_Task(void *argument) {
     Eg800AtResult_e result;
     Eg800AtResult_e cleanup_result;
-    UBaseType_t stack_free_words;
-    uint32_t events;
-    BaseType_t wait_result;
-    TickType_t wait_ticks = portMAX_DELAY;
-    bool should_connect;
-    Eg800NetworkInfo_t network_info = {0};
-    TickType_t retry_start_tick = 0U;
-    TickType_t retry_elapsed_ticks;
+    uint32_t events;                            // 事件
+    BaseType_t wait_result;                     // 等待通知的结果
+    TickType_t wait_ticks = portMAX_DELAY;      
+    bool should_connect;                        // 联网意图
+    Eg800NetworkInfo_t network_info = {0};      // Network 任务自己维护的网络信息
+    TickType_t retry_start_tick = 0U;           // 记录重试冷却期的开始时刻
+    TickType_t retry_elapsed_ticks;             // 保存冷却期已经经过的 tick 数
     const TickType_t retry_interval_ticks = pdMS_TO_TICKS(EG800_NETWORK_RETRY_INTERVAL_MS);
+    Eg800NetworkState_e previous_state;  // 处理掉线前的状态
+    bool is_need_clean_pdp;  // 本轮是否需要清理 PDP
 
     (void)argument;
 
@@ -727,190 +756,248 @@ static void Eg800_Network_Task(void *argument) {
     Eg800_Network_Update_Snapshot(&network_info);
 
     while (1) {
+        // 重置
         events = 0U;
-        wait_result = xTaskNotifyWait(0U, UINT32_MAX, &events, wait_ticks);
+        is_need_clean_pdp = false;
 
+        // ==================== 1. 等待通知 ====================
+        wait_result = xTaskNotifyWait(0U, UINT32_MAX, &events, wait_ticks);
         if (wait_result == pdTRUE) {
             LOG("Network 收到事件: events=0x%08lX", (unsigned long)events);
         }
 
-        // 事件可能合并，实际目标必须以当前保存的联网意图为准。
         should_connect = Eg800_Network_Should_Connect();
 
-        if (should_connect == false) {
-            // 已经不希望联网，停止等待联网重试期限。
-            wait_ticks = portMAX_DELAY;
-
-            // 这两个状态都已确认 PDP 清理成功，取消联网时直接结束本轮尝试。
-            if ((network_info.state == EG800_NETWORK_STATE_IDLE) || (network_info.state == EG800_NETWORK_STATE_RETRY_WAIT)) {
-                s_eg800_network_retry_count = 0U;
-                network_info.state = EG800_NETWORK_STATE_IDLE;
-                Eg800_Network_Update_Snapshot(&network_info);
-                continue;
-            }
-
-            // 故障状态下，只有收到新的明确断网请求，才再次尝试清理 PDP。
-            if ((network_info.state == EG800_NETWORK_STATE_FAULT) && ((events & EG800_NETWORK_EVENT_DISCONNECT) == 0U)) {
-                continue;
-            }
+        // ==================== 2. 识别事件 ====================
+        // 目标 PDP 异常掉线。
+        if ((events & EG800_NETWORK_EVENT_PDP_DEACT) != 0U) {
+            previous_state = network_info.state;
 
             network_info.state = EG800_NETWORK_STATE_DEACTIVATING;
             (void)memset(network_info.ip_addr, 0, sizeof(network_info.ip_addr));
             Eg800_Network_Update_Snapshot(&network_info);
 
-            LOG("Network 开始清理 PDP: context_id=%d", EG800_NETWORK_CONTEXT_ID);
+            //[TODO]:通知其他任务，底层网络已失效（异常掉线）
 
-            result = Eg800_Network_Deactivate_PDP(EG800_NETWORK_CONTEXT_ID, s_network_at_completion_sem);
-
-            if (result == EG800_AT_RESULT_OK) {
-                s_eg800_network_retry_count = 0U;
-                network_info.state = EG800_NETWORK_STATE_IDLE;
-                LOG("Network PDP 清理成功");
-            } else {
-                network_info.state = EG800_NETWORK_STATE_FAULT;
-                LOG_ERROR("Network PDP 清理失败: result=%d", (int)result);
-            }
-
-            Eg800_Network_Update_Snapshot(&network_info);
-            continue;
-
-
-        } else {
-
-
-            // 已经联网时，重复 Connect 请求不重新执行联网流程。
-            if (network_info.state == EG800_NETWORK_STATE_ACTIVE) {
-                wait_ticks = portMAX_DELAY;
-                continue;
-            }
-
-            // 故障停止后，重复 Connect 请求不能重新开启尝试或清零次数。
-            if (network_info.state == EG800_NETWORK_STATE_FAULT) {
-                wait_ticks = portMAX_DELAY;
-                continue;
-            }
-
-            // 软件状态未知时，先清理模块中可能存在的 PDP。
-            if (network_info.state == EG800_NETWORK_STATE_NONE) {
-                network_info.state = EG800_NETWORK_STATE_DEACTIVATING;
+            is_need_clean_pdp = true;    // 标记需要清理PDP
+            LOG_WARN("Network 收到 PDP 掉线事件，准备清理");
+        }
+        
+        // 上层请求断网
+        if ((events & EG800_NETWORK_EVENT_DISCONNECT) != 0U) {
+            // 按照当前联网意图处理
+            if ((should_connect == false) && (is_need_clean_pdp == false)) {
+                LOG("Network 处理主动断网请求");
+                if ((network_info.state == EG800_NETWORK_STATE_NONE) || (network_info.state == EG800_NETWORK_STATE_IDLE) || (network_info.state == EG800_NETWORK_STATE_RETRY_WAIT)) {
+                    // 联网失败后，正在重试，此时上层要求断网，结束重试即可。
+                    s_eg800_network_retry_count = 0U;
+                    network_info.state = EG800_NETWORK_STATE_IDLE;
+                } else {
+                    // NONE、ACTIVE、FAULT 等状态需要执行清理。
+                    previous_state = network_info.state;
+                    network_info.state = EG800_NETWORK_STATE_DEACTIVATING;
+                    is_need_clean_pdp = true;
+                }
+                // 清除旧连接信息
                 (void)memset(network_info.ip_addr, 0, sizeof(network_info.ip_addr));
                 Eg800_Network_Update_Snapshot(&network_info);
 
-                LOG("Network 联网前清理 PDP: context_id=%u", (unsigned int)EG800_NETWORK_CONTEXT_ID);
-
-                result = Eg800_Network_Deactivate_PDP(EG800_NETWORK_CONTEXT_ID, s_network_at_completion_sem);
-
-                if (result != EG800_AT_RESULT_OK) {
-                    network_info.state = EG800_NETWORK_STATE_FAULT;
-                    wait_ticks = portMAX_DELAY;
-                    Eg800_Network_Update_Snapshot(&network_info);
-
-                    LOG_ERROR("Network 联网前清理失败: result=%d", (int)result);
-                    continue;
-                }
-
-                network_info.state = EG800_NETWORK_STATE_IDLE;
-                Eg800_Network_Update_Snapshot(&network_info);
-                LOG("Network 联网前清理成功");
+                //[TODO]:通知其他任务，底层网络主动关闭了（主动断网）
             }
+        }
 
-            // 通知可能提前唤醒任务，必须根据原始起点判断是否已经到达重试期限。
+        // 上层请求联网。
+        if ((events & EG800_NETWORK_EVENT_CONNECT) != 0U) {
+            if ((should_connect == true) && (is_need_clean_pdp == false)) {
+                switch (network_info.state) {
+                    case EG800_NETWORK_STATE_NONE: {
+                        LOG("Network 收到联网请求，首次联网");
+                        break;
+                    }
+                    case EG800_NETWORK_STATE_IDLE: {
+                        LOG("Network 收到联网请求，准备联网");
+                        break;
+                    }
+                    case EG800_NETWORK_STATE_ACTIVE: {
+                        LOG("Network 已联网");
+                        break;
+                    }
+                    case EG800_NETWORK_STATE_RETRY_WAIT: {
+                        LOG("Network 正在等待重试");
+                        break;
+                    }
+                    case EG800_NETWORK_STATE_FAULT: {
+                        LOG_WARN("Network 处于 FAULT,忽略联网请求");
+                        break;
+                    }
+
+                    default: {
+                        // CONNECTING、DEACTIVATING 等状态沿用当前流程。
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 等待结束，但没有收到通知。
+        if (wait_result == pdFALSE) {
             if (network_info.state == EG800_NETWORK_STATE_RETRY_WAIT) {
                 retry_elapsed_ticks = xTaskGetTickCount() - retry_start_tick;
 
-                if (retry_elapsed_ticks < retry_interval_ticks) {
-                    wait_ticks = retry_interval_ticks - retry_elapsed_ticks;
-                    continue;
+                // 确认重试冷却时间已经到期。
+                if (retry_elapsed_ticks >= retry_interval_ticks) {
+                    network_info.state = EG800_NETWORK_STATE_IDLE;
+                    Eg800_Network_Update_Snapshot(&network_info);
+
+                    // LOG("Network 重试冷却结束");
                 }
+            }
+        }
 
-                // 上次失败后已完成清理，等待结束后允许再次执行单次联网。
+        // ==================== 3. 统一执行 ====================
+        if (is_need_clean_pdp == true) {
+            LOG("Network 开始清理 PDP");
+            result = Eg800_Network_Deactivate_PDP(EG800_NETWORK_CONTEXT_ID, s_network_at_completion_sem);
+            // 清除清理期间积压的同类通知，保留其他事件位
+            (void)ulTaskNotifyValueClear(NULL, EG800_NETWORK_EVENT_PDP_DEACT);
+            // 等待 AT 期间，上层可能改变联网意图。
+            should_connect = Eg800_Network_Should_Connect();
+            is_need_clean_pdp = false;
+            if (result != EG800_AT_RESULT_OK) {
+                network_info.state = EG800_NETWORK_STATE_FAULT;
+                LOG_ERROR("Network PDP 清理失败: result=%d", (int)result);
+
+            } else if ((previous_state == EG800_NETWORK_STATE_FAULT) && ((should_connect == true) || ((events & EG800_NETWORK_EVENT_DISCONNECT) == 0U))) {
+                // 只有明确请求断网且当前仍希望断开，才允许退出 FAULT。
+                network_info.state = EG800_NETWORK_STATE_FAULT;
+                LOG_WARN("Network PDP 清理完成，保持 FAULT");
+
+            } else if (should_connect == false) {
+                // 上层希望断网，结束本轮联网及重试。
+                s_eg800_network_retry_count = 0U;
                 network_info.state = EG800_NETWORK_STATE_IDLE;
+                LOG("Network PDP 清理完成，保持断开");
+
+            } else if (previous_state == EG800_NETWORK_STATE_RETRY_WAIT) {
+                // 保留原来的尝试次数和冷却起点
+                network_info.state = EG800_NETWORK_STATE_RETRY_WAIT;
+                LOG("Network PDP 清理完成，继续等待重试");
+
+            } else {
+                // 清理成功且仍希望联网，准备开启新一轮联网。
+                s_eg800_network_retry_count = 0U;
+                network_info.state = EG800_NETWORK_STATE_IDLE;
+                LOG("Network PDP 清理完成，准备联网");
+
             }
 
-            if (network_info.state != EG800_NETWORK_STATE_IDLE) {
-                continue;
-            }
+             Eg800_Network_Update_Snapshot(&network_info);
+        }
 
-            // 清理期间可能收到断网请求，开始联网前再次确认意图。
-            if (Eg800_Network_Should_Connect() == false) {
-                continue;
-            }
+        // 重新确认当前联网意图。
+        should_connect = Eg800_Network_Should_Connect();
 
-            LOG("Network 联网前准备完成");
-
-            // 发布整个单次联网流程正在执行的状态。
+        if ((network_info.state == EG800_NETWORK_STATE_IDLE || network_info.state == EG800_NETWORK_STATE_NONE) && (should_connect == true)) {
+            // 开始一次联网尝试。
             network_info.state = EG800_NETWORK_STATE_CONNECTING;
             Eg800_Network_Update_Snapshot(&network_info);
 
             s_eg800_network_retry_count++;
-            LOG("Network 开始第 %u/%u 次联网", (unsigned int)s_eg800_network_retry_count, (unsigned int)EG800_NETWORK_RETRY_MAX);
+            LOG("Network 开始第 %u 次联网尝试", (unsigned int)s_eg800_network_retry_count);
 
             result = Eg800_Network_Connect_Once(&network_info);
 
-            // 单次联网已迁入 Network 任务，在实际调用返回后记录该任务的栈余量。
-            stack_free_words = uxTaskGetStackHighWaterMark(NULL);
-            LOG("Network 栈最小剩余: %lu words (%lu bytes)", (unsigned long)stack_free_words, (unsigned long)(stack_free_words * sizeof(StackType_t)));
-
-            // 联网意图检查与成功快照发布一起完成，避免中间插入断网请求。
+            // 联网意图检查、掉线检查和成功快照发布一起完成。
             taskENTER_CRITICAL();
+
             should_connect = s_eg800_network_should_connect;
 
-            if ((result == EG800_AT_RESULT_OK) && (should_connect == true)) {
+            if (should_connect == false) {
+                // 等待 AT 期间，上层取消了联网。
+                result = EG800_AT_RESULT_CANCELLED;
+
+            } else if ((result == EG800_AT_RESULT_OK) && ((ulTaskNotifyValueClear(NULL, 0U) & EG800_NETWORK_EVENT_PDP_DEACT) != 0U)) {
+                // 期间收到过掉线通知，本次成功结果已经失效。
+                result = EG800_AT_RESULT_DATA_FAIL;
+            }
+
+            if (result == EG800_AT_RESULT_OK) {
+                s_eg800_network_retry_count = 0U;
                 Eg800_Network_Update_Snapshot(&network_info);
             }
 
             taskEXIT_CRITICAL();
 
-            if ((result == EG800_AT_RESULT_OK) && (should_connect == true)) {
-                s_eg800_network_retry_count = 0U;
-                wait_ticks = portMAX_DELAY;
+            if (result == EG800_AT_RESULT_OK) {
                 LOG("Network 联网成功: ip=%s", network_info.ip_addr);
-                continue;
-            }
 
-            // 联网失败、取消或上层已要求断开时，立即处理可能残留的 PDP。
-            LOG("Network 本次流程结束，准备清理: result=%d, should_connect=%u", (int)result, (unsigned int)should_connect);
+                // [TODO]:通知其他任务，底层网络已可用。（联网成功）
 
-            network_info.state = EG800_NETWORK_STATE_DEACTIVATING;
-            (void)memset(network_info.ip_addr, 0, sizeof(network_info.ip_addr));
-            Eg800_Network_Update_Snapshot(&network_info);
+            } else {
+                LOG_WARN("Network 联网未完成: result=%d", (int)result);
 
-            cleanup_result = Eg800_Network_Deactivate_PDP(EG800_NETWORK_CONTEXT_ID, s_network_at_completion_sem);
-
-            if (cleanup_result != EG800_AT_RESULT_OK) {
-                network_info.state = EG800_NETWORK_STATE_FAULT;
-                wait_ticks = portMAX_DELAY;
+                // 联网失败或取消后，清理可能已经激活的 PDP。
+                network_info.state = EG800_NETWORK_STATE_DEACTIVATING;
+                (void)memset(network_info.ip_addr, 0, sizeof(network_info.ip_addr));
                 Eg800_Network_Update_Snapshot(&network_info);
 
-                LOG_ERROR("Network 清理失败: connect_result=%d, cleanup_result=%d", (int)result, (int)cleanup_result);
-                continue;
-            }
+                cleanup_result = Eg800_Network_Deactivate_PDP(EG800_NETWORK_CONTEXT_ID, s_network_at_completion_sem);
 
-            // 重新读取清理结束时的意图；should_connect 保留的是联网结束时的意图。
-            if (Eg800_Network_Should_Connect() == false) {
-                s_eg800_network_retry_count = 0U;
-                network_info.state = EG800_NETWORK_STATE_IDLE;
-                wait_ticks = portMAX_DELAY;
-                LOG("Network 清理完成，保持断开");
-            } else if (should_connect == false) {
-                // 已观察到上层取消本轮联网，清理期间的新请求开启下一轮。
-                s_eg800_network_retry_count = 0U;
-                network_info.state = EG800_NETWORK_STATE_IDLE;
-                wait_ticks = 0U;
-                LOG("Network 清理完成，准备响应新的联网请求");
-            } else if (s_eg800_network_retry_count >= EG800_NETWORK_RETRY_MAX) {
-                network_info.state = EG800_NETWORK_STATE_FAULT;
-                wait_ticks = portMAX_DELAY;
-                LOG_ERROR("Network 本轮 %u 次联网均未成功，停止自动重试", (unsigned int)s_eg800_network_retry_count);
-            } else {
-                network_info.state = EG800_NETWORK_STATE_RETRY_WAIT;
-                retry_start_tick = xTaskGetTickCount();
-                wait_ticks = retry_interval_ticks;
-                LOG_WARN("Network 第 %u 次联网未成功，PDP 已清理，等待 %lu ms 后重试", (unsigned int)s_eg800_network_retry_count, (unsigned long)EG800_NETWORK_RETRY_INTERVAL_MS);
-            }
+                (void)ulTaskNotifyValueClear(NULL, EG800_NETWORK_EVENT_PDP_DEACT);
 
-            Eg800_Network_Update_Snapshot(&network_info);
-            continue;
+                // 清理期间，上层可能再次改变联网意图。
+                should_connect = Eg800_Network_Should_Connect();
+
+                if (cleanup_result != EG800_AT_RESULT_OK) {
+                    network_info.state = EG800_NETWORK_STATE_FAULT;
+                    LOG_ERROR("Network 联网后清理失败: result=%d", (int)cleanup_result);
+
+                } else if (should_connect == false) {
+                    // 当前希望断网，停止重试。
+                    s_eg800_network_retry_count = 0U;
+                    network_info.state = EG800_NETWORK_STATE_IDLE;
+                    LOG("Network 已取消联网");
+
+                } else if (result == EG800_AT_RESULT_CANCELLED) {
+                    // 本次曾取消，但当前又希望联网，开启新一轮尝试。
+                    s_eg800_network_retry_count = 0U;
+                    network_info.state = EG800_NETWORK_STATE_IDLE;
+                    LOG("Network 收到新的联网意图，准备重新联网");
+
+                } else if (s_eg800_network_retry_count >= EG800_NETWORK_RETRY_MAX) {
+                    network_info.state = EG800_NETWORK_STATE_FAULT;
+                    LOG_ERROR("Network 联网尝试次数已耗尽");
+
+                } else {
+                    // 保留尝试次数，从清理完成时开始计算冷却时间。
+                    retry_start_tick = xTaskGetTickCount();
+                    network_info.state = EG800_NETWORK_STATE_RETRY_WAIT;
+                    LOG("Network 联网失败，进入重试等待");
+                }
+
+                Eg800_Network_Update_Snapshot(&network_info);
+            }
         }
+
+
+        // ==================== 4. 设置下次等待 ====================
+        wait_ticks = portMAX_DELAY;
+
+        if (network_info.state == EG800_NETWORK_STATE_RETRY_WAIT) {
+            retry_elapsed_ticks = xTaskGetTickCount() - retry_start_tick;
+
+            if (retry_elapsed_ticks < retry_interval_ticks) {
+                wait_ticks = retry_interval_ticks - retry_elapsed_ticks;
+            } else {
+                wait_ticks = 0U;
+            }
+
+        } else if ((network_info.state == EG800_NETWORK_STATE_IDLE) && (Eg800_Network_Should_Connect() == true)) {
+            // 清理完成且仍需联网，下一轮立即继续
+            wait_ticks = 0U;
+        }
+
     }
+
+
 }

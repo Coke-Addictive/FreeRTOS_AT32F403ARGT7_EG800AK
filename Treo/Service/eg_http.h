@@ -2,38 +2,68 @@
 #define EG_HTTP_H_
 
 
+#include "eg_service.h"
+
+
+// 任务资源
+#define EG800_HTPP_TASK_STACK_SIZE              768U            // 栈深度，单位 StackType_t，当前平台共 3072 字节
+#define EG800_HTPP_TASK_PRIORITY                10U             // 低于 Service 和 Network 任务
+
+// 队列资源
+#define EG800_HTPP_RECEIVE_QUEUE_LENGTH         2U              // 接收队列最多缓存的消息条数
+#define EG800_HTPP_RECEIVE_MAX_LENGTH           2048U           // 单条消息内容最大长度，单位字节
+
+#define EG800_HTTP_SSL_CONTEXT_ID               1U              // HTTP 使用的 SSL 上下文编号
+#define EG800_MQTT_SSL_VERSION                  4U              // HTTP V4 （全部）
+
+
+typedef struct {
+    uint8_t responseheader;                                     // 临时占位
+} Eg800HttpConfig_t;
+
+// HTTP 接收消息
+typedef struct {
+    uint8_t responseheader;                                     // 临时占位
+} Eg800HttpReceiveMessage_t;
+
+
+// ----------------------------------------------------基础命令封装----------------------------------------------------
+Eg800AtResult_e Eg800_Http_Set_PDP_Context(SemaphoreHandle_t completion_sem);
+
+Eg800AtResult_e Eg800_Http_Set_SSL_Context(SemaphoreHandle_t completion_sem);
+
+Eg800AtResult_e Eg800_Http_Set_SSL_Version(uint8_t version, SemaphoreHandle_t completion_sem);
+
+Eg800AtResult_e Eg800_Http_Set_SSL_Version(uint8_t version, SemaphoreHandle_t completion_sem);
+
+Eg800AtResult_e Eg800_Http_Set_SSL_Security_Level(uint8_t level, SemaphoreHandle_t completion_sem);
+
+Eg800AtResult_e Eg800_Http_Set_SSL_SIN(uint8_t version, SemaphoreHandle_t completion_sem);
+
+Eg800AtResult_e Eg800_Http_Set_CipherSuite(SemaphoreHandle_t completion_sem);
+
+Eg800AtResult_e Eg800_Http_Set_RequestHeader(SemaphoreHandle_t completion_sem);
+
+Eg800AtResult_e Eg800_Http_Set_ResponseHeader(SemaphoreHandle_t completion_sem);
+
+Eg800AtResult_e Eg800_Http_Set_URL(uint16_t url_lengt, uint32_t time_out, SemaphoreHandle_t completion_sem);
+
+Eg800AtResult_e Eg800_Http_Send_Get(uint8_t rsptime_s, SemaphoreHandle_t completion_sem);
+
+Eg800AtResult_e Eg800_Http_Send_Get_Range(uint8_t rsptime_s, int32_t start_position, int32_t read_len, SemaphoreHandle_t completion_sem);
+
+Eg800AtResult_e Eg800_Http_Get_Read(uint8_t rsptime_s, SemaphoreHandle_t completion_sem);
+
+
+
+// ----------------------------------------------------通用 API-------------------------------------------------------
+Result_t Eg800_Http_Init(void);
 
 
 
 
-// │ AT+QHTTPCFG="contextid",1         │ 绑定 PDP 场景 1         │ :287 │
-// ├───────────────────────────────────┼─────────────────────────┼──────┤
-// │ AT+QHTTPCFG="sslctxid",1          │ 绑定 SSL 上下文 1       │ :297 │
-// ├───────────────────────────────────┼─────────────────────────┼──────┤
-// │ AT+QSSLCFG="sslversion",1,4       │ 允许协商的最高 TLS 版本 │ :308 │
-// ├───────────────────────────────────┼─────────────────────────┼──────┤
-// │ AT+QSSLCFG="ciphersuite",1,0xFFFF │ 允许全部加密套件        │ :319 │
-// ├───────────────────────────────────┼─────────────────────────┼──────┤
-// │ AT+QSSLCFG="seclevel",1,0         │ 不校验服务器证书        │ :330 │
-// ├───────────────────────────────────┼─────────────────────────┼──────┤
-// │ AT+QSSLCFG="sni",1,1              │ HTTPS 携带 SNI          │ :341 │
-// ├───────────────────────────────────┼─────────────────────────┼──────┤
-// │ AT+QHTTPCFG="requestheader",0     │ 使用模块自动生成请求头  │ :353 │
-// ├───────────────────────────────────┼─────────────────────────┼──────┤
-// │ AT+QHTTPCFG="responseheader",0    │ 读数据时不带响应头
 
-
-
-// ├──────┼─────────────────────────────────┼──────────────────────────────────────────────────────────┼──────┤
-// │ 1    │ AT+QHTTPURL=<url_len>,60        │ 等 CONNECT 提示符后发送原始 URL 字符串（超时 60s）       │ :376 │
-// ├──────┼─────────────────────────────────┼──────────────────────────────────────────────────────────┼──────┤
-// │ 2a   │ AT+QHTTPGETEX=60,<offset>,<len> │ 分块下载（每次 1KB），等 +QHTTPGET: <err>,<status>,<len> │ :462 │
-// ├──────┼─────────────────────────────────┼──────────────────────────────────────────────────────────┼──────┤
-// │ 2b   │ AT+QHTTPGET=60                  │ 长度未知的小资源 GET，等 +QHTTPGET:                      │ :527 │
-// ├──────┼─────────────────────────────────┼──────────────────────────────────────────────────────────┼──────┤
-// │ 3    │ AT+QHTTPREAD=60                 │ 进入 CONNECT 后接收原始数据，等 +QHTTPREAD: <err>        │ :604 │
-// ├──────┼─────────────────────────────────┼──────────────────────────────────────────────────────────┼──────┤
-// │ 4    │ AT+QHTTPSTOP                    │ 失败/取消时尽力停止 HTTP 流程
+#endif
 
 
 
@@ -48,6 +78,3 @@
 
 
 
-
-
-#endif // EG_HTTP_H_

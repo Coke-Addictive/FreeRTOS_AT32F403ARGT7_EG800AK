@@ -123,6 +123,10 @@ Result_t Eg800_Basic_Request_Refresh(void);
 
 
 
-
+//[TODO]:AT+QINDCFG="all",1,1       // 打开全量指示上报  （这个是什么AT指令？？？）
+//[TODO]:AT+QCFG="urcdelay",150 设置RI 脉冲到 URC 输出延时 150ms
+//[TODO]: AT+QCFG="urc/ri/other","pulse",500,1
+//[TODO]:AT+QSCLK=0                        │ 冷启动阶段禁止模块睡眠  还得有一个允许睡眠的AT指令
+//[TODO]:AT+QPOWD=1             正常关机
 
 #endif // EG_BASIC_H_

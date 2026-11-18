@@ -22,6 +22,11 @@
 #define APP_EG_NETWORK_POLL_MS              500U      // 等待 Network 状态变化时的轮询间隔，单位 ms
 #define APP_EG_NETWORK_CONNECT_WAIT_MS      1800000U  // 联网测试最长观察时间，覆盖本轮重试，单位 ms
 #define APP_EG_NETWORK_DISCONNECT_WAIT_MS   180000U   // 断网测试最长等待时间，包含在途联网流程及清理，单位 ms
+#define APP_EG_MQTT_PUBLISH_DELAY_MS        5000U     // MQTT 订阅成功到测试发布的间隔，单位 ms
+#define APP_EG_MQTT_POLL_MS                 500U      // 等待 MQTT 任务状态变化的轮询间隔，单位 ms
+#define APP_EG_MQTT_CONNECT_WAIT_MS         1800000U  // MQTT 测试最长观察时间，超时不自动取消连接，单位 ms
+#define APP_EG_MQTT_TEST_SUB_TOPIC          "Treo/test/001"
+#define APP_EG_MQTT_TEST_PUB_TOPIC          "Treo/test/002"
 
 static SemaphoreHandle_t s_system_main_at_completion_sem = NULL; // System Main 启动测试专用的 AT 完成信号量
 
@@ -123,6 +128,44 @@ static bool App_EG_Wait_Network_State(Eg800NetworkState_e expected_state, uint32
 }
 
 /**
+ * @brief 轮询 MQTT 快照，等待维护任务完成连接和订阅。
+ * @note 静态保存快照，避免增加主任务栈占用；超时仅停止本次观察。
+ */
+static bool App_EG_Wait_Mqtt_Online(void) {
+    static Eg800MqttSnapshot_t snapshot;
+    TickType_t start_tick = xTaskGetTickCount();
+    Eg800MqttState_e last_state = EG800_MQTT_STATE_NONE;
+    bool snapshot_logged = false;
+
+    while (1) {
+        if (Eg800_Mqtt_Get_Snapshot(&snapshot) != RESULT_SUCCESS) {
+            LOG_ERROR("[MQTT_TEST] 读取 MQTT 快照失败");
+            return false;
+        }
+
+        if ((snapshot_logged == false) || (snapshot.info.state != last_state)) {
+            LOG("[MQTT_TEST] MQTT 快照: state=%u, refreshing=%u, update_tick=%lu", (unsigned int)snapshot.info.state, (unsigned int)snapshot.refresh_in_progress, (unsigned long)snapshot.update_tick);
+            last_state = snapshot.info.state;
+            snapshot_logged = true;
+        }
+
+        if (snapshot.info.state == EG800_MQTT_STATE_ONLINE) {
+            return true;
+        }
+        if (snapshot.info.state == EG800_MQTT_STATE_FAULT) {
+            LOG_ERROR("[MQTT_TEST] MQTT 已进入 FAULT，停止本次测试");
+            return false;
+        }
+        if ((xTaskGetTickCount() - start_tick) >= pdMS_TO_TICKS(APP_EG_MQTT_CONNECT_WAIT_MS)) {
+            LOG_ERROR("[MQTT_TEST] 等待 MQTT 在线超时: state=%u", (unsigned int)snapshot.info.state);
+            return false;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(APP_EG_MQTT_POLL_MS));
+    }
+}
+
+/**
  * @brief 初始化 EG 驱动、Basic、Service 和 Network 层。
  */
 void App_EG_Init(void) {
@@ -141,11 +184,40 @@ void App_EG_Init(void) {
 }
 
 /**
- * @brief 启动 EG 模块，测试 Basic 信息查询和 Network 异步联网、断网接口。
- * @note 仅供 System Main 任务调用；Basic AT 使用本任务完成信号量，Network AT 由其维护任务执行。
- * @note 正常测试按 Connect、等待 ACTIVE、Disconnect、等待 IDLE 的顺序执行，结束时保持断开。
+ * @brief 持续等待并打印 MQTT 消息，接收失败时返回。
+ * @note MQTT 初始化后由单个业务任务调用，使用静态缓存接收消息。
+ */
+void App_EG_Mqtt_Receive(void) {
+    static Eg800MqttReceiveMessage_t message;
+
+    while (Eg800_Mqtt_Receive_Message(&message, portMAX_DELAY) == RESULT_SUCCESS) {
+        LOG("[MQTT_RX] topic=%s, len=%lu, payload=%.*s", message.topic, (unsigned long)message.payload_len, (int)message.payload_len, (const char *)message.payload);
+    }
+
+    LOG_ERROR("[MQTT_RX] 接收失败，请检查 MQTT 初始化状态");
+}
+
+/**
+ * @brief 启动 EG 模块，测试 Basic 信息、Network 联网及 MQTT 订阅、单次发布。
+ * @note 仅供 System Main 任务调用；Network 和 MQTT 连接均由各自维护任务执行。
+ * @note PDP 可用后登录 MQTT 并以 QoS 0 订阅，成功后等待 5 秒，以 QoS 0 发布一条测试消息。
+ * @note 发布测试后进入持续消息接收，阻塞等待后续 MQTT 消息。
  */
 void App_EG_Launch(void) {
+    static const uint8_t mqtt_test_payload[] = "Hello MQTT from Treo_device_001";
+    static const Eg800MqttConfig_t mqtt_test_config = {
+        .server_port = EG800_MQTT_SERVER_PORT,
+        .server_host = EG800_MQTT_SERVER_HOST,
+        .client_id = "GMD4317|860909089612569",
+        .username = "GMD4317|860909089612569|1782284258",
+        .password = "39d6ff2ee154ac9b25b7cf9c986cdede",
+    };
+    static const Eg800MqttSubscribeList_t mqtt_test_subscribe_list = {
+        .count = 1U,
+        .topics = {
+            APP_EG_MQTT_TEST_SUB_TOPIC,
+        },
+    };
     Eg800AtResult_e result;
     Eg800BasicSnapshot_t snapshot;
     Eg800NetworkSnapshot_t network_snapshot = {0};
@@ -242,7 +314,7 @@ void App_EG_Launch(void) {
         return;
     }
 
-    LOG("[NET_TEST] 2/4 请求已提交，等待 ACTIVE；失败重试由 Network 任务执行");
+    LOG("[NET_TEST] 2/4 请求已提交，等待 ACTIVE;失败重试由 Network 任务执行");
     network_connected = App_EG_Wait_Network_State(EG800_NETWORK_STATE_ACTIVE, APP_EG_NETWORK_CONNECT_WAIT_MS, &network_snapshot);
     stack_free_words = uxTaskGetStackHighWaterMark(NULL);
     LOG("[NET_TEST] System Main 栈最小剩余: %lu words (%lu bytes)", (unsigned long)stack_free_words, (unsigned long)(stack_free_words * sizeof(StackType_t)));
@@ -288,24 +360,84 @@ void App_EG_Launch(void) {
     LOG("测试开始");
     Eg800_Locate_Test();
 #endif
+    if (network_connected == false) {
+        LOG_ERROR("[MQTT_TEST] Network 未连接，停止 MQTT 测试");
+        return;
+    }
+
     if (Eg800_Mqtt_Init() != RESULT_SUCCESS) {
         LOG_ERROR("MQTT 初始化失败");
+        return;
     }
 
 
     result = Eg800_Mqtt_Set_Version(EG800_MQTT_VERSION, s_system_main_at_completion_sem);
     if (result != EG800_AT_RESULT_OK) {
         LOG_ERROR("MQTT 版本设置失败: result=%d", (int)result);
+        return;
     } else {
         LOG("MQTT 版本设置成功");
     }
     
-    result = Eg800_Mqtt_Set_PDP_Context(EG800_NETWORK_CONTEXT_ID, s_system_main_at_completion_sem);
+    result = Eg800_Mqtt_Set_PDP_Context(s_system_main_at_completion_sem);
     if (result != EG800_AT_RESULT_OK) {
         LOG_ERROR("MQTT PDP 配置失败: result=%d", (int)result);
+        return;
     } else {
         LOG("MQTT PDP 配置成功");
     }
+
+    result = Eg800_Mqtt_Set_Receive_Mode(EG800_MQTT_RECV_MODE, EG800_MQTT_RECV_LENGTH_ENABLED, s_system_main_at_completion_sem);
+    if (result != EG800_AT_RESULT_OK) {
+        LOG_ERROR("MQTT 接收方式配置失败: result=%d", (int)result);
+        return;
+    }
+    LOG("MQTT 接收方式配置成功: URC 直接上报，包含 payload 长度");
+
+    result = Eg800_Mqtt_Set_Keepalive(EG800_MQTT_KEEPALIVE_S, s_system_main_at_completion_sem);
+    if (result != EG800_AT_RESULT_OK) {
+        LOG_ERROR("[MQTT_TEST] 保活时间配置失败: result=%d", (int)result);
+        return;
+    }
+
+    result = Eg800_Mqtt_Set_Clean_Session(EG800_MQTT_CLEAN_SESSION, s_system_main_at_completion_sem);
+    if (result != EG800_AT_RESULT_OK) {
+        LOG_ERROR("[MQTT_TEST] 会话类型配置失败: result=%d", (int)result);
+        return;
+    }
+    LOG("[MQTT_TEST] MQTT 基础配置完成");
+
+    if (Eg800_Mqtt_Set_Config(&mqtt_test_config) != RESULT_SUCCESS) {
+        LOG_ERROR("[MQTT_TEST] 连接配置保存失败");
+        return;
+    }
+
+    if (Eg800_Mqtt_Set_Subscribe_List(&mqtt_test_subscribe_list) != RESULT_SUCCESS) {
+        LOG_ERROR("[MQTT_TEST] 订阅列表保存失败");
+        return;
+    }
+    LOG("[MQTT_TEST] 配置已保存: host=%s, port=%u, topics=%u", mqtt_test_config.server_host, (unsigned int)mqtt_test_config.server_port, (unsigned int)mqtt_test_subscribe_list.count);
+
+    if (Eg800_Mqtt_Connect() != RESULT_SUCCESS) {
+        LOG_ERROR("[MQTT_TEST] 连接请求提交失败");
+        return;
+    }
+    LOG("[MQTT_TEST] 连接请求已提交，等待 MQTT Task 完成连接和订阅");
+
+    if (App_EG_Wait_Mqtt_Online() == false) {
+        return;
+    }
+    LOG("[MQTT_TEST] MQTT 已在线，等待 5 秒后发布测试消息");
+    vTaskDelay(pdMS_TO_TICKS(APP_EG_MQTT_PUBLISH_DELAY_MS));
+
+    result = Eg800_Mqtt_Publish_Topic(0U, APP_EG_MQTT_TEST_PUB_TOPIC, EG800_MQTT_DEFAULT_QOS, EG800_MQTT_DEFAULT_RETAIN, mqtt_test_payload, sizeof(mqtt_test_payload) - 1U, s_system_main_at_completion_sem);
+    if (result != EG800_AT_RESULT_OK) {
+        LOG_ERROR("[MQTT_TEST] 发布测试消息失败: result=%d", (int)result);
+    } else {
+        LOG("[MQTT_TEST] 发布成功: topic=%s, payload=%s", APP_EG_MQTT_TEST_PUB_TOPIC, (const char *)mqtt_test_payload);
+    }
+
+    App_EG_Mqtt_Receive();
 
 }
 
