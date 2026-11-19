@@ -30,6 +30,8 @@
 #define APP_EG_MQTT_TEST_SUB_TOPIC          "Treo/test/001"
 #define APP_EG_MQTT_TEST_PUB_TOPIC          "Treo/test/002"
 
+#define APP_EG_BASIC_COMMAND_TEST_ENABLED   1U        // 1 联网并登录 MQTT 后测试关机，0 执行完整联调
+
 static SemaphoreHandle_t s_system_main_at_completion_sem = NULL; // System Main 启动测试专用的 AT 完成信号量
 
 static void App_EG_Http_Test(void);
@@ -171,7 +173,7 @@ static bool App_EG_Wait_Mqtt_Online(void) {
 }
 
 /**
- * @brief 初始化 EG 驱动、Basic、Service 和 Network 层。
+ * @brief 初始化 EG 驱动、Basic、Service 以及当前测试需要的业务层。
  */
 void App_EG_Init(void) {
     Drv_EG_Init();
@@ -182,10 +184,11 @@ void App_EG_Init(void) {
         LOG_ERROR("Network 初始化失败");
     }
 
+#if (APP_EG_BASIC_COMMAND_TEST_ENABLED == 0U)
     if (Eg800_Locate_Init() != RESULT_SUCCESS) {
         LOG_ERROR("Locate 初始化失败");
     }
-
+#endif
 }
 
 /**
@@ -203,13 +206,16 @@ void App_EG_Mqtt_Receive(void) {
 }
 
 /**
- * @brief 启动 EG 模块，测试 Basic 信息、Network 联网、HTTP 请求和 MQTT 收发。
- * @note 仅供 System Main 任务调用；Network 和 MQTT 连接均由各自维护任务执行。
- * @note PDP 可用后先测试 HTTP，再登录 MQTT，以 QoS 0 订阅并发布一条测试消息。
- * @note 发布测试后进入持续消息接收，阻塞等待后续 MQTT 消息。
+ * @brief 启动 EG 模块并执行所选测试流程。
+ * @note 仅供 System Main 任务调用。关机测试在 PDP 激活且 MQTT 在线后执行。
+ * @note 联网联调由 Network 和 MQTT 各自的任务维护连接，发布后持续接收 MQTT 消息。
  */
 void App_EG_Launch(void) {
+    Eg800AtResult_e result;
+
+#if (APP_EG_BASIC_COMMAND_TEST_ENABLED == 0U)
     static const uint8_t mqtt_test_payload[] = "Hello MQTT from Treo_device_001";
+#endif
     static const Eg800MqttConfig_t mqtt_test_config = {
         .server_port = EG800_MQTT_SERVER_PORT,
         .server_host = EG800_MQTT_SERVER_HOST,
@@ -223,7 +229,6 @@ void App_EG_Launch(void) {
             APP_EG_MQTT_TEST_SUB_TOPIC,
         },
     };
-    Eg800AtResult_e result;
     Eg800BasicSnapshot_t snapshot;
     Eg800NetworkSnapshot_t network_snapshot = {0};
     bool network_connected;
@@ -287,6 +292,7 @@ void App_EG_Launch(void) {
         LOG_ERROR("等待 Basic 基础信息刷新完成超时");
     }
 
+#if (APP_EG_BASIC_COMMAND_TEST_ENABLED == 0U)
     vTaskDelay(pdMS_TO_TICKS(APP_EG_USER_QUERY_DELAY_MS));
 
     if (Eg800_Basic_Get_Snapshot(&snapshot) == RESULT_SUCCESS) {
@@ -311,6 +317,7 @@ void App_EG_Launch(void) {
     } else {
         LOG_ERROR("70 秒后读取 Basic 快照失败");
     }
+#endif
 
     // Connect 只提交联网意图，APN 选择及 PDP 命令全部由 Network 任务执行。
     LOG("[NET_TEST] 1/4 提交 Network 联网请求");
@@ -361,17 +368,15 @@ void App_EG_Launch(void) {
     //     LOG_ERROR("[NET_TEST] 联网测试未通过，已完成断网清理");
     // }
 
-#if 1
-    LOG("测试开始");
-    Eg800_Locate_Test();
-#else
     if (network_connected == false) {
-        LOG_ERROR("[EG_TEST] Network 未连接，停止 HTTP 和 MQTT 测试");
+        LOG_ERROR("[EG_TEST] Network 未连接，停止联调");
         return;
     }
 
+#if (APP_EG_BASIC_COMMAND_TEST_ENABLED == 0U)
     App_EG_Http_Test();
     App_EG_Timer_Test(s_system_main_at_completion_sem);
+#endif
 
     if (Eg800_Mqtt_Init() != RESULT_SUCCESS) {
         LOG_ERROR("MQTT 初始化失败");
@@ -435,6 +440,7 @@ void App_EG_Launch(void) {
     if (App_EG_Wait_Mqtt_Online() == false) {
         return;
     }
+#if (APP_EG_BASIC_COMMAND_TEST_ENABLED == 0U)
     LOG("[MQTT_TEST] MQTT 已在线，等待 5 秒后发布测试消息");
     vTaskDelay(pdMS_TO_TICKS(APP_EG_MQTT_PUBLISH_DELAY_MS));
 
@@ -446,6 +452,43 @@ void App_EG_Launch(void) {
     }
 
     App_EG_Mqtt_Receive();
+#else
+    LOG("[BASIC_TEST] MQTT 已在线，开始测试 Basic 命令");
+    result = Eg800_Basic_Set_UrcDelay(s_system_main_at_completion_sem);
+    if (result == EG800_AT_RESULT_OK) {
+        LOG("[BASIC_TEST] 1/4 URC 输出延时设置成功，%u ms", (unsigned int)EG800_BASIC_URC_DELAY_MS);
+    } else {
+        LOG_ERROR("[BASIC_TEST] 1/4 URC 输出延时设置失败，result=%d", (int)result);
+    }
+
+    result = Eg800_Basic_Set_Ri_Other_Pulse_Duration(s_system_main_at_completion_sem);
+    if (result == EG800_AT_RESULT_OK) {
+        LOG("[BASIC_TEST] 2/4 RI 脉冲宽度设置成功，%u ms", (unsigned int)EG800_BASIC_RI_OTHER_PULSE_DURATION_MS);
+    } else {
+        LOG_ERROR("[BASIC_TEST] 2/4 RI 脉冲宽度设置失败，result=%d", (int)result);
+    }
+
+    // 禁止睡眠，保持串口可用以发送最后的关机命令。
+    result = Eg800_Basic_Set_Sleep_Enabled(false, s_system_main_at_completion_sem);
+    if (result == EG800_AT_RESULT_OK) {
+        LOG("[BASIC_TEST] 3/4 QSCLK=0 设置成功");
+    } else {
+        LOG_ERROR("[BASIC_TEST] 3/4 QSCLK=0 设置失败，result=%d", (int)result);
+    }
+
+    // 关机指令用于验证已连接状态下的模组行为，发送前重新读取两层连接状态。
+    if ((Eg800_Network_Is_Active() == false) || (Eg800_Mqtt_Is_Online() == false)) {
+        LOG_ERROR("[BASIC_TEST] 4/4 发送前链路已断开，跳过本轮关机测试");
+        return;
+    }
+
+    LOG("[BASIC_TEST] 4/4 PDP 已激活、MQTT 在线，发送 AT+QPOWD=1");
+    result = Eg800_Basic_Power_Down(s_system_main_at_completion_sem);
+    if (result == EG800_AT_RESULT_OK) {
+        LOG("[BASIC_TEST] 4/4 已收到关机完成 URC");
+    } else {
+        LOG_ERROR("[BASIC_TEST] 4/4 正常关机测试失败，result=%d", (int)result);
+    }
 #endif
 }
 

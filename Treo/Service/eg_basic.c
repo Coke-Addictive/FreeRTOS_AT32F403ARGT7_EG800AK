@@ -9,26 +9,29 @@
 
 #define EG800_BASIC_AT_RESPONSE_MAX_SIZE        128U               //基本AT回复长度最大值
 #define EG800_BASIC_CFUN_TIMEOUT_MS             15000U             // CFUN 命令等待最终响应的超时时间，单位 ms
+#define EG800_BASIC_POWER_DOWN_URC_TIMEOUT_MS   65000U             // 等待关机 URC 的超时，覆盖网络注销时间，单位 ms
 
 
 // Basic层内部AT命令编号，用于填充Eg800AtRequest_t.cmd.id
 typedef enum {
-    EG800_BASIC_CMD_ATE0 = 0U, // 关闭 AT 回显
-    EG800_BASIC_CMD_URC_PORT,  // 配置 URC 上报端口
-    EG800_BASIC_CMD_URC_IND,   // 开启 URC 指示
-    EG800_BASIC_CMD_RI_SIGNAL, // 配置 RI 信号类型
-    EG800_BASIC_CMD_RI_OTHER,  // 配置 其他URC 的 RI 行为
-    EG800_BASIC_CMD_URC_DELAY, // 配置 URC 延迟
-    EG800_BASIC_CMD_CPIN,      // 查询 SIM 状态
-    EG800_BASIC_CMD_CSQ,       // 查询信号强度
-    EG800_BASIC_CMD_IMEI,      // 查询 IMEI
-    EG800_BASIC_CMD_IMSI,      // 查询 IMSI
-    EG800_BASIC_CMD_ICCID,     // 查询 ICCID
-    EG800_BASIC_CMD_CNUM,      // 查询本机号码
-    EG800_BASIC_CMD_COPS,      // 查询运营商
-    EG800_BASIC_CMD_GMR,       // 查询模块固件版本
-    EG800_BASIC_CMD_CFUN_SET,  // 设置模块功能模式
-    EG800_BASIC_CMD_CFUN_QUERY // 查询模块功能模式
+    EG800_BASIC_CMD_ATE0 = 0U,          // 关闭 AT 回显
+    EG800_BASIC_CMD_URC_PORT,           // 配置 URC 上报端口
+    EG800_BASIC_CMD_URC_IND,            // 开启 URC 指示
+    EG800_BASIC_CMD_RI_SIGNAL,          // 配置 RI 信号类型
+    EG800_BASIC_CMD_RI_OTHER,           // 配置 其他URC 的 RI 行为
+    EG800_BASIC_CMD_URC_DELAY,          // 配置 URC 延迟
+    EG800_BASIC_CMD_CPIN,               // 查询 SIM 状态
+    EG800_BASIC_CMD_CSQ,                // 查询信号强度
+    EG800_BASIC_CMD_IMEI,               // 查询 IMEI
+    EG800_BASIC_CMD_IMSI,               // 查询 IMSI
+    EG800_BASIC_CMD_ICCID,              // 查询 ICCID
+    EG800_BASIC_CMD_CNUM,               // 查询本机号码
+    EG800_BASIC_CMD_COPS,               // 查询运营商
+    EG800_BASIC_CMD_GMR,                // 查询模块固件版本
+    EG800_BASIC_CMD_CFUN_SET,           // 设置模块功能模式
+    EG800_BASIC_CMD_CFUN_QUERY,         // 查询模块功能模式
+    EG800_BASIC_CMD_QSCLK,              // 设置模块睡眠许可
+    EG800_BASIC_CMD_QPOWD               // 请求模块正常关机
 } Eg800BasicCmd_e;
 
 static bool s_eg800_basic_initialized   = false;    // Basic 层是初始化标志位
@@ -91,6 +94,17 @@ static void Eg800_Basic_Ready_Urc_Handler(const char *line) {
 static void Eg800_Basic_Power_Down_Urc_Handler(const char *line) {
     LOG("处理POWER DOWN");
 }
+/**
+ * @brief 匹配 Basic 层已注册的两种关机完成 URC。
+ * @param line Service 提供的文本行。
+ * @param context 匹配上下文，未使用。
+ * @return true 表示收到关机完成 URC，false 表示其他文本。
+ */
+static bool Eg800_Basic_Match_Power_Down_Urc(const char *line, const void *context) {
+    (void)context;
+    return Eg800_Basic_Text_Equals(line, "POWERED DOWN") || Eg800_Basic_Text_Equals(line, "POWER DOWN");
+}
+
 static void Eg800_Basic_Sim_Urc_Handler(const char *line) {
     Eg800BasicSimState_e state;
     // 当前处理的是URC主动上报，没有 AT 查询产生的 CME 错误码。
@@ -1104,15 +1118,92 @@ Eg800AtResult_e Eg800_Basic_Query_Operator(Eg800BasicOperator_e *operator_type, 
     return EG800_AT_RESULT_OK;
 }
 
+/**
+ * @brief 设置从 RI 脉冲开始到输出 URC 的延时，单位 ms。
+ * @param completion_sem 当前调用任务专用的 AT 完成信号量。
+ * @return OK 表示设置成功。参数无效或未初始化时返回 PARAM_ERROR，其余为 AT 执行错误。
+ */
+Eg800AtResult_e Eg800_Basic_Set_UrcDelay(SemaphoreHandle_t completion_sem) {
+    char command[48];
+    int command_len;
 
+    if ((s_eg800_basic_initialized == false) || (completion_sem == NULL)) {
+        return EG800_AT_RESULT_PARAM_ERROR;
+    }
 
+    command_len = snprintf(command, sizeof(command), "AT+QCFG=\"urcdelay\",%u\r\n",
+                           (unsigned int)EG800_BASIC_URC_DELAY_MS);
+    if ((command_len <= 0) || ((size_t)command_len >= sizeof(command))) {
+        return EG800_AT_RESULT_PARAM_ERROR;
+    }
 
+    return Eg800_Basic_At_Execute(EG800_BASIC_CMD_URC_DELAY, "设置 URC 输出延时", command, NULL, NULL, 0U, NULL, completion_sem);
+}
 
+/**
+ * @brief 将其他 URC 对应的 RI 配置为单个低脉冲，宽度单位为 ms。
+ * @param completion_sem 当前调用任务专用的 AT 完成信号量。
+ * @return OK 表示设置成功。参数无效或未初始化时返回 PARAM_ERROR，其余为 AT 执行错误。
+ */
+Eg800AtResult_e Eg800_Basic_Set_Ri_Other_Pulse_Duration(SemaphoreHandle_t completion_sem) {
+    char command[48];
+    int command_len;
 
+    if ((s_eg800_basic_initialized == false) || (completion_sem == NULL)) {
+        return EG800_AT_RESULT_PARAM_ERROR;
+    }
 
+    command_len = snprintf(command, sizeof(command), "AT+QCFG=\"urc/ri/other\",\"pulse\",%u,1\r\n",
+                           (unsigned int)EG800_BASIC_RI_OTHER_PULSE_DURATION_MS);
+    if ((command_len <= 0) || ((size_t)command_len >= sizeof(command))) {
+        return EG800_AT_RESULT_PARAM_ERROR;
+    }
 
+    return Eg800_Basic_At_Execute(EG800_BASIC_CMD_RI_OTHER, "设置其他 URC 的 RI 脉冲宽度", command, NULL, NULL, 0U, NULL, completion_sem);
+}
 
+/**
+ * @brief 允许或禁止模块进入睡眠。
+ * @param enabled true 允许睡眠，false 禁止睡眠。
+ * @param completion_sem 当前调用任务专用的 AT 完成信号量。
+ * @return OK 表示设置成功。参数无效或未初始化时返回 PARAM_ERROR，其余为 AT 执行错误。
+ * @note 允许睡眠后，模块仍由硬件引脚状态控制是否进入睡眠。
+ */
+Eg800AtResult_e Eg800_Basic_Set_Sleep_Enabled(bool enabled, SemaphoreHandle_t completion_sem) {
+    const char *command = (enabled == true) ? "AT+QSCLK=1\r\n" : "AT+QSCLK=0\r\n";
 
+    if ((s_eg800_basic_initialized == false) || (completion_sem == NULL)) {
+        return EG800_AT_RESULT_PARAM_ERROR;
+    }
+
+    return Eg800_Basic_At_Execute(EG800_BASIC_CMD_QSCLK, "设置模块睡眠许可", command, NULL, NULL, 0U, NULL, completion_sem);
+}
+
+/**
+ * @brief 请求模块正常关机，等待网络注销后的关机完成 URC。
+ * @param completion_sem 当前调用任务专用的 AT 完成信号量。
+ * @return OK 表示收到关机完成 URC，TIMEOUT 表示等待响应或 URC 超时。参数无效或未初始化时返回 PARAM_ERROR，其余为 AT 执行错误。
+ * @note 调用前由上层停止其他 AT 请求，模块重新启动后再恢复发送。
+ */
+Eg800AtResult_e Eg800_Basic_Power_Down(SemaphoreHandle_t completion_sem) {
+    Eg800AtRequest_t request = {0};
+
+    if ((s_eg800_basic_initialized == false) || (completion_sem == NULL)) {
+        return EG800_AT_RESULT_PARAM_ERROR;
+    }
+
+    // 模组先回复 OK 受理命令，注销网络后才上报关机完成。
+    request.cmd.owner = EG800_AT_OWNER_BASIC;
+    request.cmd.id = (uint8_t)EG800_BASIC_CMD_QPOWD;
+    request.flow = EG800_AT_FLOW_TEXT_URC;
+    request.name = "模块正常关机";
+    request.tx = "AT+QPOWD=1\r\n";
+    request.expect_urc_prefix = "POWER";
+    request.expect_urc_match = Eg800_Basic_Match_Power_Down_Urc;
+    request.urc_timeout_ms = EG800_BASIC_POWER_DOWN_URC_TIMEOUT_MS;
+
+    return Eg800_AT_Execute(&request, NULL, completion_sem);
+}
 
 /**
  * @brief 查询本次冷启动周期是否已经收到RDY。

@@ -24,7 +24,8 @@
 
 #define EG800_BASIC_REFRESH_INTERVAL_MS       60000U // Basic 信息全量刷新间隔，单位 ms
 
-
+#define EG800_BASIC_URC_DELAY_MS                  150U  // 从 RI 脉冲开始到输出 URC 的延时，单位 ms
+#define EG800_BASIC_RI_OTHER_PULSE_DURATION_MS    500U  // 其他 URC 对应的 RI 低脉冲宽度，单位 ms
 
 
 
@@ -109,9 +110,13 @@ Eg800AtResult_e Eg800_Basic_Query_Firmware_Version(char *version, size_t version
 
 Eg800AtResult_e Eg800_Basic_Query_Operator(Eg800BasicOperator_e *operator_type, char *operator_name, size_t operator_name_size, SemaphoreHandle_t completion_sem);
 
+Eg800AtResult_e Eg800_Basic_Set_UrcDelay(SemaphoreHandle_t completion_sem);
 
+Eg800AtResult_e Eg800_Basic_Set_Ri_Other_Pulse_Duration(SemaphoreHandle_t completion_sem);
 
+Eg800AtResult_e Eg800_Basic_Set_Sleep_Enabled(bool enabled, SemaphoreHandle_t completion_sem);
 
+Eg800AtResult_e Eg800_Basic_Power_Down(SemaphoreHandle_t completion_sem);
 
 //---------------------------------------------------------信息查询获取-------------------------------------------
 bool Eg800_Basic_Is_Boot_Ready(void);
