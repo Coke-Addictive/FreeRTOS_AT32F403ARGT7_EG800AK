@@ -128,7 +128,6 @@ Eg800AtResult_e Eg800_Mqtt_Disconnect_Client_To_Server(SemaphoreHandle_t complet
 
 Eg800AtResult_e Eg800_Mqtt_Subscribe_Topic(uint16_t msg_id, const char *topic, uint8_t qos, SemaphoreHandle_t completion_sem);
 Eg800AtResult_e Eg800_Mqtt_Unsubscribe_Topic(uint16_t msg_id, const char *topic, SemaphoreHandle_t completion_sem);
-// 当前仅支持 QoS 0，qos 和 msg_id 均须为 0。
 Eg800AtResult_e Eg800_Mqtt_Publish_Topic(uint16_t msg_id, const char *topic, uint8_t qos, bool retain, const uint8_t *payload, size_t payload_len, SemaphoreHandle_t completion_sem);
 
 

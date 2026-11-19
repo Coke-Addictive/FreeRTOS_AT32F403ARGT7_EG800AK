@@ -10,11 +10,7 @@
 
 #define EG800_LOCATE_GNSS_QUERY_MODE            2U      // 本查询接口固定使用模式 2，输出十进制度坐标 （暂时没启用，先固定写死了）
 
-// 定位默认开关，统一通过 Eg800_Locate_Read_Config() 读取；true 开启，false 关闭。
-#define EG800_LOCATE_DEFAULT_ENABLED          true      // 定位系统默认总开关
-#define EG800_LOCATE_BDS_DEFAULT_ENABLED      true      // 北斗定位默认开关
-#define EG800_LOCATE_WIFI_DEFAULT_ENABLED     true      // Wi-Fi 定位默认开关
-#define EG800_LOCATE_LBS_DEFAULT_ENABLED      true      // 基站定位默认开关
+
 
 // 定位结果来源
 typedef enum {
@@ -79,10 +75,10 @@ typedef struct {
 
 // 定位服务快照
 typedef struct {
-    bool refresh_in_progress;                           // 后台是否正在进行定位或收尾操作
-    Eg800LocationInfo_t bds_info;                       // 北斗-定位信息
-    Eg800LocationInfo_t wifi_info;                      // WIFI-定位信息
-    Eg800LocationInfo_t lbs_info;                       // 基站-定位信息
+    bool refresh_in_progress;                                   // 后台是否正在进行定位或收尾操作
+    Eg800LocationInfo_t bds_info;                               // 北斗-定位信息
+    Eg800LocationInfo_t wifi_info;                              // WIFI-定位信息
+    Eg800LocationInfo_t lbs_info;                               // 基站-定位信息
 } Eg800LocationSnapshot_t;
 
 
@@ -110,11 +106,7 @@ Eg800AtResult_e Eg800_Locate_Lbs(SemaphoreHandle_t completion_sem);
 // 初始化接口
 Result_t Eg800_Locate_Init(void);
 
-
-void Eg800_Locate_Config_SW_Update(bool locate_sw, bool bds_sw, bool wifi_sw, bool lbs_sw);
-
-
-void Eg800_Locate_Test(void);
+// void Eg800_Locate_Test(void);
 
 
 #endif // EG_LOCATE_H_

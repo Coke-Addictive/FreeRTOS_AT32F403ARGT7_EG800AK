@@ -22,10 +22,10 @@
 /* 调用者可以为每条请求指定超时，但服务层会限制在以下最大值内 */
 #define EG800_AT_MAX_FINAL_TIMEOUT_MS               60000U                  // 单次最大等待 OK/ERROR 的超时时间
 #define EG800_AT_MAX_URC_TIMEOUT_MS                 665000U                 // 覆盖 MQTT 报文超时 60 s、重传 10 次及 5 s 余量，单位 ms
-#define EG800_AT_MAX_DATA_TIMEOUT_MS                120000U                 // 单次等待原始二进制数据的最大超时时间
+#define EG800_AT_MAX_DATA_TIMEOUT_MS                260000U                 // 原始数据接收阶段上限，覆盖 QHTTPREAD 的 255 s 和 5 s 余量，单位 ms
 
 
-#define EG800_AT_MAX_RAW_SIZE                       1050U                   // 单次原始数据接收最大长度1KB，再给点余量
+#define EG800_AT_MAX_RAW_SIZE                       2048U                   // 单次原始数据接收最大长度
 
 
 

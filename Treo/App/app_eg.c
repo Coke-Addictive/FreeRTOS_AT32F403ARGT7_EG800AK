@@ -6,6 +6,8 @@
 #include "eg_network.h"
 #include "eg_locate.h"
 #include "eg_mqtt.h"
+#include "eg_http.h"
+#include "eg_timer.h"
 
 
 #include "FreeRTOS.h"
@@ -29,6 +31,9 @@
 #define APP_EG_MQTT_TEST_PUB_TOPIC          "Treo/test/002"
 
 static SemaphoreHandle_t s_system_main_at_completion_sem = NULL; // System Main 启动测试专用的 AT 完成信号量
+
+static void App_EG_Http_Test(void);
+static void App_EG_Timer_Test(SemaphoreHandle_t completion_sem);
 
 /**
  * @brief 打印一份 Basic 信息快照。
@@ -198,9 +203,9 @@ void App_EG_Mqtt_Receive(void) {
 }
 
 /**
- * @brief 启动 EG 模块，测试 Basic 信息、Network 联网及 MQTT 订阅、单次发布。
+ * @brief 启动 EG 模块，测试 Basic 信息、Network 联网、HTTP 请求和 MQTT 收发。
  * @note 仅供 System Main 任务调用；Network 和 MQTT 连接均由各自维护任务执行。
- * @note PDP 可用后登录 MQTT 并以 QoS 0 订阅，成功后等待 5 秒，以 QoS 0 发布一条测试消息。
+ * @note PDP 可用后先测试 HTTP，再登录 MQTT，以 QoS 0 订阅并发布一条测试消息。
  * @note 发布测试后进入持续消息接收，阻塞等待后续 MQTT 消息。
  */
 void App_EG_Launch(void) {
@@ -356,14 +361,17 @@ void App_EG_Launch(void) {
     //     LOG_ERROR("[NET_TEST] 联网测试未通过，已完成断网清理");
     // }
 
-#if 0
+#if 1
     LOG("测试开始");
     Eg800_Locate_Test();
-#endif
+#else
     if (network_connected == false) {
-        LOG_ERROR("[MQTT_TEST] Network 未连接，停止 MQTT 测试");
+        LOG_ERROR("[EG_TEST] Network 未连接，停止 HTTP 和 MQTT 测试");
         return;
     }
+
+    App_EG_Http_Test();
+    App_EG_Timer_Test(s_system_main_at_completion_sem);
 
     if (Eg800_Mqtt_Init() != RESULT_SUCCESS) {
         LOG_ERROR("MQTT 初始化失败");
@@ -438,7 +446,127 @@ void App_EG_Launch(void) {
     }
 
     App_EG_Mqtt_Receive();
+#endif
+}
 
+// HTTP 固件下载测试配置
+#define APP_EG_HTTP_TEST_DOWNLOAD_COUNT    3U        // 串行执行的固件下载轮数
+#define APP_EG_HTTP_TEST_CHUNK_SIZE        2048U     // 单段请求长度，单位字节
+#define APP_EG_HTTP_TEST_FILE_SIZE         75372U    // MCU_V6.0.5.bin 的参考长度，单位字节
+
+/**
+ * @brief 提交一轮固件下载并逐包接收，取到终态后返回。
+ * @param request 测试固件的 URL、总长度和分包大小。
+ * @param round 当前测试轮数，从 1 开始。
+ * @return true 表示收到 DONE 且接收长度正确，false 表示提交、接收或下载失败。
+ */
+static bool App_EG_Http_Test_Download(const Eg800HttpDownloadRequest_t *request, unsigned int round) {
+    Eg800HttpDownloadStartResult_e start_result;
+    Eg800HttpDownloadEvent_t event;
+    uint32_t received_size = 0U;
+
+    LOG("[HTTP_TEST] 第 %u/%u 轮开始下载，总长 %lu B，分包 %lu B",
+        round, APP_EG_HTTP_TEST_DOWNLOAD_COUNT, (unsigned long)request->file_size,
+        (unsigned long)request->chunk_size);
+
+    start_result = Eg800_Http_Download_Start(request);
+    if (start_result != EG800_HTTP_DOWNLOAD_START_OK) {
+        LOG_ERROR("[HTTP_TEST] 第 %u 轮提交下载失败，result=%d", round, (int)start_result);
+        return false;
+    }
+
+    while (Eg800_Http_Download_Receive(&event, portMAX_DELAY) == RESULT_SUCCESS) {
+        if (event.type == EG800_HTTP_DOWNLOAD_EVENT_DATA) {
+            // OTA 或音频在这里按 event.offset 处理 event.data 中的 event.len 字节。
+            // 处理完毕再接收下一包，下一次 Receive 会归还当前缓冲区。
+            received_size += (uint32_t)event.len;
+            LOG("[HTTP_TEST] 第 %u/%u 轮已接收 %lu B 固件包，偏移 %lu B，累计 %lu/%lu B",
+                round, APP_EG_HTTP_TEST_DOWNLOAD_COUNT, (unsigned long)event.len,
+                (unsigned long)event.offset, (unsigned long)received_size,
+                (unsigned long)request->file_size);
+            continue;
+        }
+
+        if (event.type == EG800_HTTP_DOWNLOAD_EVENT_DONE) {
+            if ((received_size != request->file_size) || (event.offset != received_size)) {
+                LOG_ERROR("[HTTP_TEST] 第 %u 轮长度不符，实收 %lu B，任务完成 %lu B，期望 %lu B",
+                    round, (unsigned long)received_size, (unsigned long)event.offset,
+                    (unsigned long)request->file_size);
+                return false;
+            }
+
+            LOG("[HTTP_TEST] 第 %u/%u 轮完成，合计 %lu B",
+                round, APP_EG_HTTP_TEST_DOWNLOAD_COUNT, (unsigned long)received_size);
+            return true;
+        }
+
+        LOG_ERROR("[HTTP_TEST] 第 %u 轮下载失败，stage=%d，result=%d，offset=%lu B，HTTP=%u",
+            round, (int)event.stage, (int)event.result, (unsigned long)event.offset,
+            (unsigned int)event.http_status);
+        return false;
+    }
+
+    LOG_ERROR("[HTTP_TEST] 第 %u 轮接收下载事件失败", round);
+    return false;
+}
+
+/**
+ * @brief 联网后配置 HTTP，串行验证三次固件下载和逐包接收。
+ * @note 由 System Main 在 PDP 可用后调用。
+ */
+static void App_EG_Http_Test(void) {
+    // 三轮复用同一个测试文件，按文件总长度确定最后一包。
+    static const Eg800HttpDownloadRequest_t request = {
+        .url = "http://beidou.gmd-cloud.com/admin/data/media/ota/firmware/GMD4317/MCU_V6.0.5.bin",
+        .file_size = APP_EG_HTTP_TEST_FILE_SIZE,
+        .chunk_size = APP_EG_HTTP_TEST_CHUNK_SIZE
+    };
+    Eg800AtResult_e result;
+    unsigned int round;
+
+    if (Eg800_Http_Download_Init() != RESULT_SUCCESS) {
+        LOG_ERROR("[HTTP_TEST] 初始化下载任务失败");
+        return;
+    }
+
+    result = Eg800_Http_Configure_Basic();
+    if (result != EG800_AT_RESULT_OK) {
+        LOG_ERROR("[HTTP_TEST] 基础配置失败，result=%d", (int)result);
+        return;
+    }
+
+    for (round = 1U; round <= APP_EG_HTTP_TEST_DOWNLOAD_COUNT; round++) {
+        if (App_EG_Http_Test_Download(&request, round) == false) {
+            return;
+        }
+    }
+}
+
+/**
+ * @brief 测试模组的网络授时配置和 RTC 查询。
+ * @param completion_sem System Main 使用的 AT 完成信号量。
+ */
+static void App_EG_Timer_Test(SemaphoreHandle_t completion_sem) {
+    Eg800TimerClock_t clock;
+    Eg800AtResult_e timer_result;
+
+    timer_result = Eg800_Timer_Set_Auto_Update(EG800_TIMER_AUTO_UPDATE_LOCAL, completion_sem);
+    if (timer_result == EG800_AT_RESULT_OK) {
+        LOG("[TIMER_TEST] CTZU=3 设置成功，重启模组后生效");
+    } else {
+        LOG_ERROR("[TIMER_TEST] CTZU=3 设置失败，result=%d", (int)timer_result);
+    }
+
+    timer_result = Eg800_Timer_Query_Clock(&clock, completion_sem);
+    if (timer_result != EG800_AT_RESULT_OK) {
+        LOG_ERROR("[TIMER_TEST] 查询模组 RTC 失败，result=%d", (int)timer_result);
+        return;
+    }
+
+    LOG("[TIMER_TEST] 模组 RTC %04u-%02u-%02u %02u:%02u:%02u，UTC 偏移 %+d 分钟",
+        (unsigned int)clock.year, (unsigned int)clock.month, (unsigned int)clock.day,
+        (unsigned int)clock.hour, (unsigned int)clock.minute, (unsigned int)clock.second,
+        (int)clock.timezone_quarters * 15);
 }
 
 

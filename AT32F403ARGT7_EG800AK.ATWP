@@ -53,6 +53,7 @@
             <ParametersSub name="MCU_SRAM_SIZE" value="98304"/>
             <ParametersSub name="configCPU_CLOCK_HZ" value="240000000"/>
             <ParametersSub name="configUSE_RECURSIVE_MUTEXES" value="1"/>
+            <ParametersSub name="TOTAL_HEAP_SIZE" value="30720"/>
         </Parameters>
         <Tasks>
             <ParametersGroup>
@@ -158,8 +159,8 @@
         <CodeSplitIP>true</CodeSplitIP>
         <AddNecessaryFileFlag>false</AddNecessaryFileFlag>
         <DeletePriviousFiles>true</DeletePriviousFiles>
-        <MinHeapSize>0x200</MinHeapSize>
-        <MinStackSize>0x400</MinStackSize>
+        <MinHeapSize>0x400</MinHeapSize>
+        <MinStackSize>0x800</MinStackSize>
         <UseFirmware>true</UseFirmware>
         <PackageVersion>V2.2.2</PackageVersion>
     </ProjectInfomation>

@@ -551,19 +551,7 @@ Result_t Eg800_Locate_Init(void) {
     return RESULT_SUCCESS;
 }
 
-void Eg800_Locate_Config_SW_Update(bool locate_sw, bool bds_sw, bool wifi_sw, bool lbs_sw) {
-#if 0
-    s_eg800_locate_config.locate_sw = locate_sw;
-    s_eg800_locate_config.bds_sw = bds_sw;
-    s_eg800_locate_config.wifi_sw = wifi_sw;
-    s_eg800_locate_config.lbs_sw = lbs_sw;
-#else
-    s_eg800_locate_config.locate_sw = locate_sw;
-    s_eg800_locate_config.bds_sw = bds_sw;
-    s_eg800_locate_config.wifi_sw = wifi_sw;
-    s_eg800_locate_config.lbs_sw = lbs_sw;
-#endif
-}
+
 
 
 
@@ -720,60 +708,60 @@ Eg800AtResult_e Eg800_Locate_Lbs(SemaphoreHandle_t completion_sem) {
 
 
 
-/**
- * @brief 开启 GNSS 后测试 Wi-Fi 扫描和 LBS 小区查询，并打印缓存结果。
- */
-void Eg800_Locate_Test(void) {
-    Eg800AtResult_e result;
-    uint8_t wifi_ap_count;
-    double longitude = 0.0;
-    double latitude = 0.0;
-    double altitude = 0.0;
+// /**
+//  * @brief 开启 GNSS 后测试 Wi-Fi 扫描和 LBS 小区查询，并打印缓存结果。
+//  */
+// void Eg800_Locate_Test(void) {
+//     Eg800AtResult_e result;
+//     uint8_t wifi_ap_count;
+//     double longitude = 0.0;
+//     double latitude = 0.0;
+//     double altitude = 0.0;
 
-    Eg800_Locate_Gnss_Set_Enabled(true, s_locate_at_completion_sem);
-    vTaskDelay(pdMS_TO_TICKS(3000U));
+//     Eg800_Locate_Gnss_Set_Enabled(true, s_locate_at_completion_sem);
+//     vTaskDelay(pdMS_TO_TICKS(3000U));
 
-    // LOG("开始查询 GNSS 经纬度");
-    // for (int i=0;i<5;i++) {
-    //     result = Eg800_Locate_Gnss_Query(&longitude, &latitude, &altitude, s_locate_at_completion_sem);
-    //     if (result == EG800_AT_RESULT_OK) {
-    //         LOG("GNSS 查询成功: longitude=%.6f, latitude=%.6f, altitude=%.1f m", longitude, latitude, altitude);
-    //     } else {
-    //         LOG_ERROR("GNSS 查询失败: result=%d", (int)result);
-    //     }
-    //     vTaskDelay(pdMS_TO_TICKS(60000));
-    // }
+//     // LOG("开始查询 GNSS 经纬度");
+//     // for (int i=0;i<5;i++) {
+//     //     result = Eg800_Locate_Gnss_Query(&longitude, &latitude, &altitude, s_locate_at_completion_sem);
+//     //     if (result == EG800_AT_RESULT_OK) {
+//     //         LOG("GNSS 查询成功: longitude=%.6f, latitude=%.6f, altitude=%.1f m", longitude, latitude, altitude);
+//     //     } else {
+//     //         LOG_ERROR("GNSS 查询失败: result=%d", (int)result);
+//     //     }
+//     //     vTaskDelay(pdMS_TO_TICKS(60000));
+//     // }
 
-    // // result = Eg800_Locate_Gnss_Set_Enabled(false, s_locate_at_completion_sem);
+//     // // result = Eg800_Locate_Gnss_Set_Enabled(false, s_locate_at_completion_sem);
     
-    // result = Eg800_Locate_Gnss_Stop(s_locate_at_completion_sem);
-    // if(result == EG800_AT_RESULT_OK) {
-    //     eg800_gnss_hardware_state = EG800_LOCATE_GNSS_STATE_OFF;
-    // }
-    LOG("开始查询 wifi-scan");
-    result = Eg800_Locate_WifiScan(s_locate_at_completion_sem);
-    vTaskDelay(pdMS_TO_TICKS(10000));
+//     // result = Eg800_Locate_Gnss_Stop(s_locate_at_completion_sem);
+//     // if(result == EG800_AT_RESULT_OK) {
+//     //     eg800_gnss_hardware_state = EG800_LOCATE_GNSS_STATE_OFF;
+//     // }
+//     LOG("开始查询 wifi-scan");
+//     result = Eg800_Locate_WifiScan(s_locate_at_completion_sem);
+//     vTaskDelay(pdMS_TO_TICKS(10000));
     
-    // 固定本次打印的条数，打印期间新到达的热点留待下次观察。
-    wifi_ap_count = s_eg800_locate_wifi_scan_transfer_date.count;
-    LOG("Wi-Fi 扫描观察: AT结果=%d, is_valid=%u, 热点数量=%u", (int)result, (unsigned int)s_eg800_locate_wifi_scan_transfer_date.is_valid, (unsigned int)wifi_ap_count);
-    for (size_t i = 0; i < wifi_ap_count; i++) {
-        const Eg800LocateWifiAp_t *ap = &s_eg800_locate_wifi_scan_transfer_date.aps[i];
-        LOG("Wi-Fi 热点[%u]: MAC=%s, RSSI=%ld dBm, 信道=%u", (unsigned int)(i + 1U), ap->mac, (long)ap->rssi, (unsigned int)ap->channel);
-    }
+//     // 固定本次打印的条数，打印期间新到达的热点留待下次观察。
+//     wifi_ap_count = s_eg800_locate_wifi_scan_transfer_date.count;
+//     LOG("Wi-Fi 扫描观察: AT结果=%d, is_valid=%u, 热点数量=%u", (int)result, (unsigned int)s_eg800_locate_wifi_scan_transfer_date.is_valid, (unsigned int)wifi_ap_count);
+//     for (size_t i = 0; i < wifi_ap_count; i++) {
+//         const Eg800LocateWifiAp_t *ap = &s_eg800_locate_wifi_scan_transfer_date.aps[i];
+//         LOG("Wi-Fi 热点[%u]: MAC=%s, RSSI=%ld dBm, 信道=%u", (unsigned int)(i + 1U), ap->mac, (long)ap->rssi, (unsigned int)ap->channel);
+//     }
     
-    vTaskDelay(pdMS_TO_TICKS(1000));
+//     vTaskDelay(pdMS_TO_TICKS(1000));
 
 
-    result = Eg800_Locate_Lbs(s_locate_at_completion_sem);
+//     result = Eg800_Locate_Lbs(s_locate_at_completion_sem);
 
-    vTaskDelay(pdMS_TO_TICKS(1000));
+//     vTaskDelay(pdMS_TO_TICKS(1000));
 
-    const Eg800LocateLbsCell_t *lbs_info = &s_eg800_locate_lbs_servingcell_lte;
-    LOG("LBS 查询观察: AT结果=%d, is_valid=%u", (int)result, (unsigned int)lbs_info->is_valid);
-    LOG("LBS 主服务小区: MCC=%lu, MNC=%02lu, TAC=0x%04lX, Cell_ID=0x%lX, RSSI=%ld dBm", (unsigned long)lbs_info->mcc, (unsigned long)lbs_info->mnc, (unsigned long)lbs_info->tac, (unsigned long)lbs_info->cell_id, (long)lbs_info->rssi);
+//     const Eg800LocateLbsCell_t *lbs_info = &s_eg800_locate_lbs_servingcell_lte;
+//     LOG("LBS 查询观察: AT结果=%d, is_valid=%u", (int)result, (unsigned int)lbs_info->is_valid);
+//     LOG("LBS 主服务小区: MCC=%lu, MNC=%02lu, TAC=0x%04lX, Cell_ID=0x%lX, RSSI=%ld dBm", (unsigned long)lbs_info->mcc, (unsigned long)lbs_info->mnc, (unsigned long)lbs_info->tac, (unsigned long)lbs_info->cell_id, (long)lbs_info->rssi);
 
-}
+// }
 
 
 

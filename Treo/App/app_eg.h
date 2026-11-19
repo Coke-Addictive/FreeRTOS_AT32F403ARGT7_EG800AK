@@ -44,7 +44,10 @@
 
 
 
-
+#define EG800_LOCATE_DEFAULT_ENABLED          true      // 定位系统默认总开关
+#define EG800_LOCATE_BDS_DEFAULT_ENABLED      true      // 北斗定位默认开关
+#define EG800_LOCATE_WIFI_DEFAULT_ENABLED     true      // Wi-Fi 定位默认开关
+#define EG800_LOCATE_LBS_DEFAULT_ENABLED      true      // 基站定位默认开关
 
 
 
