@@ -8,6 +8,9 @@
 #include "stdbool.h"
 
 
+#define DRV_EG_LOG_ENABLE   (1)                 // DRV_EG 日志开关
+
+
 // 通信故障统计
 typedef struct {
     uint32_t rx_ring_overflow_count;            // RX 软件环形缓冲区溢出的次数
@@ -19,9 +22,6 @@ typedef struct {
 } Drv_EG_Error_t;
 
 
-
-// 初始化和模块引脚控制接口
-// 使用其他接口前必须先调用 Drv_EG_Init()；PWR_ON/PWR_OFF 分别输出高/低电平。
 void Drv_EG_Init(void);
 void Drv_EG_Power_SW(PowerState_t state);
 void Drv_EG_Launch_SW(PowerState_t state);
@@ -42,6 +42,7 @@ size_t Drv_EG_Send(const char *str);
 
 
 // 中断桥接接口；由芯片中断入口在清除对应硬件标志后调用。
+
 void Drv_EG_USART_IRQHandler(void);
 void Drv_EG_RX_DMA_Channel_IRQHandler(void);
 void Drv_EG_TX_DMA_Channel_IRQHandler(void);
@@ -49,6 +50,7 @@ void Drv_EG_TX_DMA_Channel_IRQHandler(void);
 
 
 // 致命错误处理接口；输出故障信息后立即复位 MCU。
+
 void Drv_EG_RX_DMA_Error_IRQHandler(void);
 void Drv_EG_TX_DMA_Error_IRQHandler(void);
 void Drv_EG_USART_Error_IRQHandler(void);

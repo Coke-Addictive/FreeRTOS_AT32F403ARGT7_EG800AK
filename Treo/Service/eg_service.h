@@ -25,7 +25,6 @@
 #define EG800_AT_MAX_DATA_TIMEOUT_MS                260000U                 // 原始数据接收阶段上限，覆盖 QHTTPREAD 的 255 s 和 5 s 余量，单位 ms
 
 
-#define EG800_AT_MAX_RAW_SIZE                       2048U                   // 单次原始数据接收最大长度
 
 
 
@@ -116,32 +115,32 @@ typedef struct {
 
 // AT 请求结构体（调用者必须先清零，再填写需要的字段并传给 Eg800_AT_Execute）
 typedef struct {
-    Eg800AtCmd_t cmd;                    // 逻辑命令编号
-    Eg800AtFlow_e flow;                  // 采用的AT通信流程
-    const char *name;                    // 日志名，可为 NULL
-    const char *tx;                      // 实际发送字符串，必须带 "\r\n"
-    const char *rsp_prefix;              // 需要保存的文本响应前缀，NULL 表示保存非 URC 文本
-    const char *expect_urc_prefix;       // 需要等待的异步URC前缀；SEND_DATA/RECV_RAW填写后也会在OK后继续等待该URC
-    const char *prompt_prefix;           // 数据提示符，NULL 时由 flow 决定默认提示
+    Eg800AtCmd_t cmd;                       // 逻辑命令编号
+    Eg800AtFlow_e flow;                     // 采用的AT通信流程
+    const char *name;                       // 日志名，可为 NULL
+    const char *tx;                         // 实际发送字符串，必须带 "\r\n"
+    const char *rsp_prefix;                 // 需要保存的文本响应前缀，NULL 表示保存非 URC 文本
+    const char *expect_urc_prefix;          // 需要等待的异步URC前缀；SEND_DATA/RECV_RAW填写后也会在OK后继续等待该URC
+    const char *prompt_prefix;              // 数据提示符，NULL 时由 flow 决定默认提示
 
-    uint32_t final_timeout_ms;           // 等待 OK/ERROR 的超时时间，0 使用默认值
-    uint32_t urc_timeout_ms;             // 等待异步 URC 的超时时间，0 使用默认值
-    uint32_t data_timeout_ms;            // 等待原始数据的超时时间，0 使用默认值
+    uint32_t final_timeout_ms;              // 等待 OK/ERROR 的超时时间，0 使用默认值
+    uint32_t urc_timeout_ms;                // 等待异步 URC 的超时时间，0 使用默认值
+    uint32_t data_timeout_ms;               // 等待原始数据的超时时间，0 使用默认值
 
-    char *rx_buf;                        // 调用者提供的文本响应缓冲区，可为 NULL
-    size_t rx_buf_size;                  // 调用者提供的文本响应缓冲区大小
+    char *rx_buf;                           // 调用者提供的文本响应缓冲区，可为 NULL
+    size_t rx_buf_size;                     // 调用者提供的文本响应缓冲区大小
 
     //仅SEND_DATA流程使用
-    const uint8_t *tx_data;              // 提示符后发送的原始数据，
-    size_t tx_data_len;                  // 提示符后发送的原始数据长度
+    const uint8_t *tx_data;                 // 提示符后发送的原始数据，
+    size_t tx_data_len;                     // 提示符后发送的原始数据长度
 
     //仅RECV_RAW流程使用
-    uint8_t *raw_buf;                    // 调用者提供的用于保存模块返回原始数据的缓冲区，可为 NULL
-    size_t raw_buf_size;                 // 调用者提供的用于保存模块返回原始数据的缓冲区大小
-    size_t raw_expect_len;               // 期望接收的原始数据长度(raw_expect_len：> 0 且 <= raw_buf_size 且 <= EG800_AT_MAX_RAW_SIZE)
-    bool allow_during_shutdown;          // Service停止接收普通请求时，是否仍允许执行该请求(一般命令为false,关机、断开网络等收尾命令可设为true，当前为预留)
-    Eg800AtUrcMatch_t expect_urc_match;   // 可选的结果筛选函数，NULL 表示仅按 expect_urc_prefix 完成请求
-    const void *expect_urc_context;      // 筛选函数的上下文，引用对象必须保持有效直到同步调用返回
+    uint8_t *raw_buf;                       // 调用者提供的用于保存模块返回原始数据的缓冲区，可为 NULL
+    size_t raw_buf_size;                    // 调用者提供的用于保存模块返回原始数据的缓冲区大小
+    size_t raw_expect_len;                  // 期望接收的原始数据长度(raw_expect_len：> 0 且 <= raw_buf_size 且 <= EG800_AT_MAX_RAW_SIZE)
+    bool allow_during_shutdown;             // Service停止接收普通请求时，是否仍允许执行该请求(一般命令为false,关机、断开网络等收尾命令可设为true，当前为预留)
+    Eg800AtUrcMatch_t expect_urc_match;     // 可选的结果筛选函数，NULL 表示仅按 expect_urc_prefix 完成请求
+    const void *expect_urc_context;         // 筛选函数的上下文，引用对象必须保持有效直到同步调用返回
 } Eg800AtRequest_t;
 
 

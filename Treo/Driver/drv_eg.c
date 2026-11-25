@@ -3,39 +3,42 @@
 // TX 由任务写入软件环形缓冲区，DMA FDT 中断释放已发送区段并启动下一段发送。
 #include "drv_eg.h"
 
-#include "board_eg.h"           // EG800AK 板级引脚和外设资源
+#include "board_eg.h"               // EG800AK 板级引脚和外设资源
 
-#include "lwrb.h"               // 软件环形缓冲区实现
+#include "lwrb.h"                   // 软件环形缓冲区实现
 
-#define LOG_TAG "DRV_EG"        // 驱动日志模块标签
+
+
+#define LOG_SUB_ENABLE              DRV_EG_LOG_ENABLE   
+#define LOG_TAG "DRV_EG" 
 #include "log.h"
 
 
 
-#define EG_RX_DMA_BUF_SIZE          2048U // RX DMA 硬件循环缓冲区大小，单位字节
+#define EG_RX_DMA_BUF_SIZE          2048U                   // RX DMA 硬件循环缓冲区大小，单位字节
 
-#define EG_RX_RING_BUF_SIZE         4096U // RX 软件环形缓冲区大小，单位字节
-#define EG_TX_RING_BUF_SIZE         2048U // TX 软件环形缓冲区大小，单位字节
-
-
-
-static uint8_t s_eg_rx_dma_buf[EG_RX_DMA_BUF_SIZE];       // RX DMA 循环缓冲区，由 DMA1 Channel1 连续写入
-static uint8_t s_eg_rx_ring_buf[EG_RX_RING_BUF_SIZE];     // RX 软件环形缓冲区数据区，由任务上下文写入
-static size_t s_eg_rx_dma_old_pos = 0;                    // RX DMA 上一次处理位置，用于计算新增数据长度
-static lwrb_t s_eg_rx_ring;                               // RX 软件环形缓冲区控制块
+#define EG_RX_RING_BUF_SIZE         4096U                   // RX 软件环形缓冲区大小，单位字节
+#define EG_TX_RING_BUF_SIZE         2048U                   // TX 软件环形缓冲区大小，单位字节
 
 
 
-static uint8_t s_eg_tx_ring_buf[EG_TX_RING_BUF_SIZE];     // TX 软件环形缓冲区数据区，由任务写入、DMA1 Channel2 读取
-static volatile size_t s_eg_tx_dma_current_len = 0;       // 当前 DMA 发送长度，0 表示 TX DMA 空闲
-static lwrb_t s_eg_tx_ring;                               // TX 软件环形缓冲区控制块
+static uint8_t s_eg_rx_dma_buf[EG_RX_DMA_BUF_SIZE];         // RX DMA 循环缓冲区，由 DMA 连续写入
+static uint8_t s_eg_rx_ring_buf[EG_RX_RING_BUF_SIZE];       // RX 软件环形缓冲区数据区，由任务上下文写入
+static size_t s_eg_rx_dma_old_pos = 0;                      // RX DMA 上一次处理位置，用于计算新增数据长度
+static lwrb_t s_eg_rx_ring;                                 // RX 软件环形缓冲区控制块
 
 
-// RX 检查请求标志，由 USART IDLE、RX DMA HDT/FDT 中断置位，并由任务上下文取走。多次中断会合并为一次检查请求；该标志不记录中断次数。
+
+static uint8_t s_eg_tx_ring_buf[EG_TX_RING_BUF_SIZE];       // TX 软件环形缓冲区数据区，由任务写入、DMA 读取并发送
+static volatile size_t s_eg_tx_dma_current_len = 0;         // 当前 DMA 发送长度，0 表示 TX DMA 空闲
+static lwrb_t s_eg_tx_ring;                                 // TX 软件环形缓冲区控制块
+
+
+// RX 检查请求标志，由 USART IDLE、RX_DMA HDT/FDT 中断置位，并由任务上下文取走。多次中断会合并为一次检查请求
 static volatile bool s_eg_rx_check_pending = false; 
 
 
-static volatile Drv_EG_Error_t s_eg_error;                // 驱动内部故障统计，复位后清零，当前未提供读取接口
+static volatile Drv_EG_Error_t s_eg_error;                  // 驱动内部故障统计，复位后清零，当前未提供读取接口
 
 
 /**
@@ -82,7 +85,7 @@ static void EG_GPIO_Init(void) {
 
 
 /**
- * @brief 初始化 EG800AK 使用的 USART3 及其 DMA 收发请求和中断。
+ * @brief 初始化 EG800AK 使用的串口
  */
 static void EG_USART_Init(void) {
     BOARD_EG_USART_INIT();
@@ -91,17 +94,17 @@ static void EG_USART_Init(void) {
 
 
 /**
- * @brief 初始化 RX 循环 DMA 和 TX 单次传输 DMA 通道。
- * @note RX DMA 初始化后立即启动，TX DMA 保持关闭并在有数据待发送时启动。
+ * @brief 初始化 RX 循环 DMA 通道和 TX 单次传输 DMA 通道。
+ * @note RX_DMA 初始化后立即启动，TX_DMA 保持关闭并在有数据待发送时启动。
  */
 static void EG_DMA_Init(void) {
-    // DMA1 Channel1 用于 USART2 RX，循环模式，传输完成/半传输完成/传输错误中断
+    // RX_DMA   循环模式，传输完成/半传输完成/传输错误中断
     BOARD_EG_RX_DMA_INIT();
     wk_dma_channel_config(BOARD_EG_RX_DMA_CHANNEL, BOARD_EG_USART_DATA_REG_ADDR, (uint32_t)s_eg_rx_dma_buf, EG_RX_DMA_BUF_SIZE);
-    dma_flag_clear(BOARD_EG_RX_DMA_GL_FLAG); // 清除可能的旧标志
+    dma_flag_clear(BOARD_EG_RX_DMA_GL_FLAG);    // 清除可能的旧标志
     dma_channel_enable(BOARD_EG_RX_DMA_CHANNEL, TRUE);
 
-    // DMA1 Channel2 用于 USART2 TX，正常模式，传输完成/传输错误中断
+    // TX_DMA 正常模式，传输完成/传输错误中断
     BOARD_EG_TX_DMA_INIT();
     dma_flag_clear(BOARD_EG_TX_DMA_GL_FLAG);
     // wk_dma_channel_config tx的配置在发送数据时动态配置，默认先不启动
@@ -446,7 +449,7 @@ void Drv_EG_TX_DMA_Channel_IRQHandler(void) {
 
 
 
-// 现有 LOG 机制可能在立即复位前来不及输出，因此错误中断暂时使用 printf 输出简短诊断信息。
+// // 现有 LOG 机制可能在立即复位前来不及输出，因此错误中断暂时使用 printf 输出简短诊断信息。
 
 
 

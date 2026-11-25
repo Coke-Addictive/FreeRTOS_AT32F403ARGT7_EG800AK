@@ -2,6 +2,12 @@
 
 #include <stdio.h>
 
+#include "eg_service_cfg.h"
+
+#define LOG_SUB_ENABLE              EG_TIMER_LOG_ENABLE         // 由 Service 配置控制日志输出
+#define LOG_TAG "EG_TIMER"                                      // Timer 日志标签
+#include "log.h"
+
 #define EG800_TIMER_AT_TIMEOUT_MS               3000U           // CTZU/CCLK 手册最大响应 300 ms，软件等待预留至 3 s
 #define EG800_TIMER_CLOCK_RESPONSE_SIZE         64U             // CCLK 响应缓冲区容量，单位字节
 

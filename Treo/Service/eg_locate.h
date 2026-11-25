@@ -4,9 +4,9 @@
 #include "stdbool.h"
 #include "types.h"
 #include "eg_service.h"
+#include "eg_service_cfg.h"
 
-#define EG800_GNSS_TASK_STACK_SIZE              384U    // Basic 后台刷新任务栈大小
-#define EG800_GNSS_TASK_PRIORITY                7U      // 低于 EG800 Service 任务优先级
+
 
 #define EG800_LOCATE_GNSS_QUERY_MODE            2U      // 本查询接口固定使用模式 2，输出十进制度坐标 （暂时没启用，先固定写死了）
 

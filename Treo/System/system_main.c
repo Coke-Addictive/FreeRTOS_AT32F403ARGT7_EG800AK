@@ -38,8 +38,8 @@ Result_t System_Main_Init(void) {
 static void System_Main_Task(void *parameter) {
 
     LOG("主任务启动成功");
-    App_EG_Init();
-    App_EG_Launch();
+    // App_EG_Init();
+    // App_EG_Launch();
 
     while (1) {
         LOG("Main Task Running...");

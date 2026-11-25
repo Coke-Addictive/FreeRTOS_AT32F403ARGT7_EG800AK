@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 
+#define LOG_SUB_ENABLE              EG_NETWORK_LOG_ENABLE       // 由 Service 配置控制日志输出
 #define LOG_TAG "EG_NET"
 #include "log.h"
 

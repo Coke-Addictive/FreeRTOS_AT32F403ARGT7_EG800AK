@@ -6,6 +6,7 @@
 #include "eg_network.h"
 
 
+#define LOG_SUB_ENABLE              EG_HTTP_LOG_ENABLE       // 由 Service 配置控制日志输出
 #define LOG_TAG "EG_HTTP"
 #include "log.h"
 

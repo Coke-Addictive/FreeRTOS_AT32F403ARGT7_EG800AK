@@ -3,11 +3,10 @@
 
 
 #include "eg_service.h"
+#include "eg_service_cfg.h"
 
 
-// 任务资源
-#define EG800_HTPP_TASK_STACK_SIZE              768U            // 栈深度，单位 StackType_t，当前平台共 3072 字节
-#define EG800_HTPP_TASK_PRIORITY                10U             // 低于 Service 和 Network 任务
+
 
 #define EG800_HTTP_SSL_CONTEXT_ID               1U              // HTTPS 使用的 SSL 上下文编号
 #define EG800_HTTP_SSL_VERSION                  4U              // 允许模组支持的全部 SSL/TLS 版本

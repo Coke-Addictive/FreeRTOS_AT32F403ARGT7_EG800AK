@@ -1,5 +1,6 @@
 #include "eg_basic.h"
 
+#define LOG_SUB_ENABLE              EG_BASIC_LOG_ENABLE   
 #define LOG_TAG "EG_BASIC"
 #include "log.h"
 
@@ -7,7 +8,7 @@
 
 #include <stdio.h>
 
-#define EG800_BASIC_AT_RESPONSE_MAX_SIZE        128U               //基本AT回复长度最大值
+#define EG800_BASIC_AT_RESPONSE_MAX_SIZE        128U               // 基本AT回复长度最大值
 #define EG800_BASIC_CFUN_TIMEOUT_MS             15000U             // CFUN 命令等待最终响应的超时时间，单位 ms
 #define EG800_BASIC_POWER_DOWN_URC_TIMEOUT_MS   65000U             // 等待关机 URC 的超时，覆盖网络注销时间，单位 ms
 
@@ -1131,8 +1132,7 @@ Eg800AtResult_e Eg800_Basic_Set_UrcDelay(SemaphoreHandle_t completion_sem) {
         return EG800_AT_RESULT_PARAM_ERROR;
     }
 
-    command_len = snprintf(command, sizeof(command), "AT+QCFG=\"urcdelay\",%u\r\n",
-                           (unsigned int)EG800_BASIC_URC_DELAY_MS);
+    command_len = snprintf(command, sizeof(command), "AT+QCFG=\"urcdelay\",%u\r\n", (unsigned int)EG800_BASIC_URC_DELAY_MS);
     if ((command_len <= 0) || ((size_t)command_len >= sizeof(command))) {
         return EG800_AT_RESULT_PARAM_ERROR;
     }
@@ -1153,8 +1153,7 @@ Eg800AtResult_e Eg800_Basic_Set_Ri_Other_Pulse_Duration(SemaphoreHandle_t comple
         return EG800_AT_RESULT_PARAM_ERROR;
     }
 
-    command_len = snprintf(command, sizeof(command), "AT+QCFG=\"urc/ri/other\",\"pulse\",%u,1\r\n",
-                           (unsigned int)EG800_BASIC_RI_OTHER_PULSE_DURATION_MS);
+    command_len = snprintf(command, sizeof(command), "AT+QCFG=\"urc/ri/other\",\"pulse\",%u,1\r\n", (unsigned int)EG800_BASIC_RI_OTHER_PULSE_DURATION_MS);
     if ((command_len <= 0) || ((size_t)command_len >= sizeof(command))) {
         return EG800_AT_RESULT_PARAM_ERROR;
     }

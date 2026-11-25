@@ -6,30 +6,29 @@
 #include <stddef.h>
 #include "types.h"
 #include "eg_service.h"
-
-#define EG800_BASIC_TASK_STACK_SIZE           384U // Basic 后台刷新任务栈大小
-#define EG800_BASIC_TASK_PRIORITY             8U   // 低于 EG800 Service 任务优先级
+#include "eg_service_cfg.h"
 
 
 
 
 
 
-#define EG800_BASIC_IMEI_SIZE                 24U  // IMEI缓冲区
-#define EG800_BASIC_IMSI_SIZE                 24U  // IMSI缓冲区
-#define EG800_BASIC_ICCID_SIZE                24U  // ICCID缓冲区
-#define EG800_BASIC_PHONE_NUMBER_SIZE         32U  // SIM本机号码缓冲区
-#define EG800_BASIC_OPERATOR_NAME_SIZE        24U  // 运营商名称缓冲区
-#define EG800_BASIC_FIRMWARE_VERSION_SIZE     64U  // 模块固件版本缓冲区
 
-#define EG800_BASIC_REFRESH_INTERVAL_MS       60000U // Basic 信息全量刷新间隔，单位 ms
+#define EG800_BASIC_IMEI_SIZE                       24U     // IMEI缓冲区
+#define EG800_BASIC_IMSI_SIZE                       24U     // IMSI缓冲区
+#define EG800_BASIC_ICCID_SIZE                      24U     // ICCID缓冲区
+#define EG800_BASIC_PHONE_NUMBER_SIZE               32U     // SIM本机号码缓冲区
+#define EG800_BASIC_OPERATOR_NAME_SIZE              24U     // 运营商名称缓冲区
+#define EG800_BASIC_FIRMWARE_VERSION_SIZE           64U     // 模块固件版本缓冲区
 
-#define EG800_BASIC_URC_DELAY_MS                  150U  // 从 RI 脉冲开始到输出 URC 的延时，单位 ms
-#define EG800_BASIC_RI_OTHER_PULSE_DURATION_MS    500U  // 其他 URC 对应的 RI 低脉冲宽度，单位 ms
+#define EG800_BASIC_REFRESH_INTERVAL_MS             60000U  // Basic 信息全量刷新间隔，单位 ms
+
+#define EG800_BASIC_URC_DELAY_MS                    150U    // 从 RI 脉冲开始到输出 URC 的延时，单位 ms
+#define EG800_BASIC_RI_OTHER_PULSE_DURATION_MS      500U    // 其他 URC 对应的 RI 低脉冲宽度，单位 ms
 
 
 
-#define EG800_BASIC_CME_SIM_NOT_INSERTED      10   // +CME ERROR: 10，表示SIM卡未插入
+#define EG800_BASIC_CME_SIM_NOT_INSERTED            10   // +CME ERROR: 10，表示SIM卡未插入
 
 // SIM卡状态
 typedef enum {
@@ -128,10 +127,9 @@ Result_t Eg800_Basic_Request_Refresh(void);
 
 
 
-//[TODO]:AT+QINDCFG="all",1,1       // 打开全量指示上报  （这个是什么AT指令？？？）
-//[TODO]:AT+QCFG="urcdelay",150 设置RI 脉冲到 URC 输出延时 150ms
-//[TODO]: AT+QCFG="urc/ri/other","pulse",500,1
-//[TODO]:AT+QSCLK=0                        │ 冷启动阶段禁止模块睡眠  还得有一个允许睡眠的AT指令
-//[TODO]:AT+QPOWD=1             正常关机
+//[TODO]:AT+QINDCFG="all",1,1       // 打开全量指示上报  （这个是什么AT指令？？？,）
+
+
+
 
 #endif // EG_BASIC_H_

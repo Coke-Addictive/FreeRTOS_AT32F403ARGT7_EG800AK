@@ -3,11 +3,11 @@
 
 #include <stddef.h>
 #include "eg_basic.h"
+#include "eg_service_cfg.h"
 
 
 
-#define EG800_NETWORK_TASK_STACK_SIZE          768U             // Network任务栈深度
-#define EG800_NETWORK_TASK_PRIORITY            11U              // 低于EG Service任务优先级
+
 
 
 #define EG800_NETWORK_RETRY_MAX                 5U              // 联网失败最大尝试次数

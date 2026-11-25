@@ -11,40 +11,41 @@
 
 
 // 日志
+#define LOG_SUB_ENABLE              EG_SERVICE_LOG_ENABLE   
 #define LOG_TAG "EG_SRV"
 #include "log.h"
 
 typedef enum {
-    EG800_AT_STATE_IDLE = 0,    // 空闲，允许取下一条 AT
-    EG800_AT_STATE_WAIT_FINAL,  // 已发送，等待 OK/ERROR 终止行
-    EG800_AT_STATE_WAIT_URC,    // 已收到 OK，等待指定异步 URC
-    EG800_AT_STATE_WAIT_PROMPT, // 已发送，等待 '>' 或 CONNECT 提示
-    EG800_AT_STATE_WAIT_RAW     // 已收到 CONNECT，按长度接收原始数据
+    EG800_AT_STATE_IDLE = 0,            // 空闲，允许取下一条 AT
+    EG800_AT_STATE_WAIT_FINAL,          // 已发送，等待 OK/ERROR 终止行
+    EG800_AT_STATE_WAIT_URC,            // 已收到 OK，等待指定异步 URC
+    EG800_AT_STATE_WAIT_PROMPT,         // 已发送，等待 '>' 或 CONNECT 提示
+    EG800_AT_STATE_WAIT_RAW             // 已收到 CONNECT，按长度接收原始数据
 } Eg800AtState_e;
 
 typedef struct {
-    Eg800AtRequest_t request;         // AT 请求副本
-    Eg800AtResultInfo_t *result_info; // 调用者的结果输出
-    TaskHandle_t notify_task;         // 调用者的任务句柄
-    SemaphoreHandle_t completion_sem; // 调用者提供的完成信号量
-    uint32_t wait_budget_ms;          // 本请求全部等待阶段及调度余量的预算，单位 ms
+    Eg800AtRequest_t request;           // AT 请求副本
+    Eg800AtResultInfo_t *result_info;   // 调用者的结果输出
+    TaskHandle_t notify_task;           // 调用者的任务句柄
+    SemaphoreHandle_t completion_sem;   // 调用者提供的完成信号量
+    uint32_t wait_budget_ms;            // 本请求全部等待阶段及调度余量的预算，单位 ms
 } Eg800AtQueueItem_t;
 
 // FreeRTOS 资源
-static TaskHandle_t s_eg800_service_task_handle = NULL; // 任务句柄
-static QueueHandle_t s_eg800_at_queue = NULL;           // 队列句柄
-static uint32_t s_eg800_pending_wait_budget_ms = 0U;    // 当前请求及排队请求的等待预算总和，单位 ms
+static TaskHandle_t s_eg800_service_task_handle = NULL;         // 任务句柄
+static QueueHandle_t s_eg800_at_queue = NULL;                   // 队列句柄
+static uint32_t s_eg800_pending_wait_budget_ms = 0U;            // 当前请求及排队请求的等待预算总和，单位 ms
 
-static uint8_t s_eg800_rx_chunk[EG800_SERVICE_RX_CHUNK_SIZE]; // 单次读取底层 RX 环形缓冲区的临时缓冲区
-static char s_eg800_line_buf[EG800_SERVICE_LINE_BUF_SIZE];    // AT 文本行缓冲区
-static size_t s_eg800_line_len = 0U;                          // 当前 AT 文本行缓冲区的长度
+static uint8_t s_eg800_rx_chunk[EG800_SERVICE_RX_CHUNK_SIZE];   // 单次读取底层 RX 环形缓冲区的临时缓冲区
+static char s_eg800_line_buf[EG800_SERVICE_LINE_BUF_SIZE];      // AT 文本行缓冲区
+static size_t s_eg800_line_len = 0U;                            // 当前 AT 文本行缓冲区的长度
 
-static Eg800AtState_e s_eg800_at_state = EG800_AT_STATE_IDLE; // 当前 AT 命令的状态机状态
-static TickType_t s_eg800_wait_start_tick = 0U;               // 当前等待阶段从什么时候开始
-static TickType_t s_eg800_wait_timeout_tick = 0U;             // 当前阶段允许等待多长时间
+static Eg800AtState_e s_eg800_at_state = EG800_AT_STATE_IDLE;   // 当前 AT 命令的状态机状态
+static TickType_t s_eg800_wait_start_tick = 0U;                 // 当前等待阶段从什么时候开始
+static TickType_t s_eg800_wait_timeout_tick = 0U;               // 当前阶段允许等待多长时间
 
-static bool s_eg800_current_busy = false;       // 当前是否有AT命令正在执行 （服务任务只有在空闲时才能取下一条
-static Eg800AtQueueItem_t s_eg800_current_item; // 当前正在执行的 具体AT请求
+static bool s_eg800_current_busy = false;                       // 当前是否有AT命令正在执行 （服务任务只有在空闲时才能取下一条
+static Eg800AtQueueItem_t s_eg800_current_item;                 // 当前正在执行的 具体AT请求
 
 /**
  * @brief URC路由表存储区
@@ -395,13 +396,13 @@ static void Eg800_Service_Start_Request(void) {
 
     // 驱动层返回实际写入TX环形缓冲区的字节少于命令总长度表示命令没有完整提交
     if (sent_len != tx_len) {
-        LOG("EG AT SEND FAIL: %s\r\n", (request->name != NULL) ? request->name : "-");
+        LOG_ERROR("EG AT SEND FAIL: %s\r\n", (request->name != NULL) ? request->name : "-");
         Eg800_Request_Complete(EG800_AT_RESULT_SEND_FAIL, -1);
         return;
     }
 
     //TODO:这里以后可以弄一个LOG日志开关宏
-    LOG_TRACE("AT TX: %s", request->tx);
+    LOG("AT TX: %s", request->tx);
 
     // 清除上一条请求可能留下的未完成文本行
     s_eg800_line_len = 0U;

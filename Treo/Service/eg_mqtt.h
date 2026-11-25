@@ -2,11 +2,10 @@
 #define EG_MQTT_H_
 
 #include "eg_service.h"
+#include "eg_service_cfg.h"
 
 
-// 任务资源
-#define EG800_MQTT_TASK_STACK_SIZE           768U           // 栈深度，单位 StackType_t，当前平台共 3072 字节
-#define EG800_MQTT_TASK_PRIORITY             10U            // 低于 Service 和 Network 任务
+
 
 // MQTT 任务通知事件
 #define EG800_MQTT_EVENT_CONNECT             (1UL << 0)     // 请求建立并保持 MQTT 连接

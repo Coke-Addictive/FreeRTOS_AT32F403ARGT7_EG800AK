@@ -1,99 +1,73 @@
-#ifndef AURON_LOG_H_
-#define AURON_LOG_H_
+#ifndef LOG_H_
+#define LOG_H_
 
-#include <stdint.h>
 #include <stdio.h>
 
+// 日志等级，数值越大越详细。
+typedef enum {
+    LOG_LEVEL_ERROR = 0,        // 当前操作失败。
+    LOG_LEVEL_WARN,             // 出现异常，当前操作仍可继续。
+    LOG_LEVEL_SYSCYCLE,         // 设备启动、睡眠和唤醒等运行状态切换。
+    LOG_LEVEL_INFO,             // 正常运行中的关键事件。
+    LOG_LEVEL_DEBUG             // 调试细节
+} LogLevel_e;
 
-// 日志等级，数值越大输出越详细
-#define LOG_LEVEL_NONE            0U
-#define LOG_LEVEL_ERROR           1U
-#define LOG_LEVEL_WARN            2U
-#define LOG_LEVEL_INFO            3U
-#define LOG_LEVEL_DEBUG           4U
-#define LOG_LEVEL_TRACE           5U
-
-#ifndef PROJECT_LOG_LEVEL
-#define PROJECT_LOG_LEVEL         LOG_LEVEL_TRACE
+#ifndef LOG_DEFAULT_LEVEL
+#define LOG_DEFAULT_LEVEL       LOG_LEVEL_DEBUG     // 允许输出的最高日志等级。
 #endif
 
-#define COLOR_RED                 "\033[31m"
-#define COLOR_GREEN               "\033[32m"
-#define COLOR_YELLOW              "\033[33m"
-#define COLOR_BLUE                "\033[34m"
-#define COLOR_MAGENTA             "\033[35m"
-#define COLOR_CYAN                "\033[36m"
-#define COLOR_WHITE               "\033[37m"
-#define COLOR_BRIGHT_RED          "\033[91m"
-#define COLOR_BRIGHT_GREEN        "\033[92m"
-#define COLOR_BRIGHT_YELLOW       "\033[93m"
-#define COLOR_BRIGHT_BLUE         "\033[94m"
-#define COLOR_BRIGHT_MAGENTA      "\033[95m"
-#define COLOR_BRIGHT_CYAN         "\033[96m"
-#define COLOR_BRIGHT_WHITE        "\033[97m"
-#define COLOR_RESET               "\033[0m"
+#ifndef LOG_MAIN_ENABLE
+#define LOG_MAIN_ENABLE         1                   // 日志总开关，1 为开启，0 为关闭。
+#endif
 
-#define BG_RED                    "\033[41m"
-#define BG_GREEN                  "\033[42m"
-#define BG_YELLOW                 "\033[43m"
-#define BG_BLUE                   "\033[44m"
-#define BG_MAGENTA                "\033[45m"
-#define BG_CYAN                   "\033[46m"
-#define BG_RESET                  "\033[49m"
+#ifndef LOG_SUB_ENABLE
+#define LOG_SUB_ENABLE          0                   // 日志子开关，1 为开启，0 为关闭。
+#endif
 
-#define STYLE_BOLD                "\033[1m"
-#define STYLE_UNDERLINE           "\033[4m"
-#define STYLE_RESET               "\033[22m"
 
 #ifndef LOG_TAG
-#define LOG_TAG                   "NONE"
+#define LOG_TAG                 "NONE"
 #endif
 
-// 日志后端
+
+
+// 日志等级对应的 ANSI 前景色。
+#define LOG_COLOR_ERROR         "\x1B[31m"          // ERROR     日志使用红色。
+#define LOG_COLOR_WARN          "\x1B[33m"          // WARN      日志使用黄色。
+#define LOG_COLOR_SYSCYCLE      "\x1B[95m"          // SYSCYCLE  日志使用紫色。
+#define LOG_COLOR_INFO          "\x1B[32m"          // INFO      日志使用绿色。
+#define LOG_COLOR_DEBUG         "\x1B[37m"          // DEBUG     日志使用白色。
+#define LOG_COLOR_RESET         "\x1B[0m"           // 一条日志输出完成后恢复终端样式。
+
+
+
+// 调度器启动前初始化日志。
 void Log_Init(void);
-void Log_Printf(const char *color, const char *tag, const char *fmt, ...);
-uint32_t Log_IsrDropCountGet(void);
 
-#if (PROJECT_LOG_LEVEL >= LOG_LEVEL_INFO)
-#define LOG_PRINT(fmt, ...) \
-    Log_Printf(NULL, LOG_TAG, fmt, ##__VA_ARGS__)
-#define LOG_INFO(fmt, ...) \
-    Log_Printf(COLOR_GREEN, LOG_TAG, fmt, ##__VA_ARGS__)
-#else
-#define LOG_PRINT(fmt, ...)       ((void)0)
-#define LOG_INFO(fmt, ...)        ((void)0)
+#if LOG_MAIN_ENABLE
+// 日志宏共用的整行输出函数，仅供任务上下文调用。
+// 业务代码请勿直接调用此接口，请使用 LOG() 或各等级日志宏。
+void Log_Printf(LogLevel_e level, const char *tag, const char *fmt, ...);
 #endif
 
-#if (PROJECT_LOG_LEVEL >= LOG_LEVEL_WARN)
-#define LOG_WARN(fmt, ...) \
-    Log_Printf(COLOR_YELLOW, LOG_TAG, fmt, ##__VA_ARGS__)
+#if LOG_MAIN_ENABLE && LOG_SUB_ENABLE
+// 在调用点判断等级，过滤时不计算打印参数。
+#define LOG_PRINT_LEVEL(level, ...) \
+    do { \
+        if ((level) <= LOG_DEFAULT_LEVEL) { \
+            Log_Printf((level), LOG_TAG, __VA_ARGS__); \
+        } \
+    } while (0)
 #else
-#define LOG_WARN(fmt, ...)        ((void)0)
+#define LOG_PRINT_LEVEL(level, ...) ((void)0)    // 总开关或子开关关闭时丢弃打印调用。
 #endif
 
-#if (PROJECT_LOG_LEVEL >= LOG_LEVEL_ERROR)
-#define LOG_ERROR(fmt, ...) \
-    Log_Printf(COLOR_RED, LOG_TAG, fmt, ##__VA_ARGS__)
-#else
-#define LOG_ERROR(fmt, ...)       ((void)0)
-#endif
+// 各等级日志入口。
+#define LOG_ERROR(...)    LOG_PRINT_LEVEL(LOG_LEVEL_ERROR, __VA_ARGS__)     // 输出 ERROR 日志。
+#define LOG_WARN(...)     LOG_PRINT_LEVEL(LOG_LEVEL_WARN, __VA_ARGS__)      // 输出 WARN 日志。
+#define LOG_SYSCYCLE(...) LOG_PRINT_LEVEL(LOG_LEVEL_SYSCYCLE, __VA_ARGS__)  // 输出设备状态切换日志。
+#define LOG_INFO(...)     LOG_PRINT_LEVEL(LOG_LEVEL_INFO, __VA_ARGS__)      // 输出 INFO 日志。
+#define LOG_DEBUG(...)    LOG_PRINT_LEVEL(LOG_LEVEL_DEBUG, __VA_ARGS__)     // 输出 DEBUG 日志。
+#define LOG(...)          LOG_DEBUG(__VA_ARGS__)                            // DEBUG 日志的简写。
 
-#if (PROJECT_LOG_LEVEL >= LOG_LEVEL_DEBUG)
-#define LOG_DEBUG(fmt, ...) \
-    Log_Printf(COLOR_WHITE, LOG_TAG, fmt, ##__VA_ARGS__)
-#else
-#define LOG_DEBUG(fmt, ...)       ((void)0)
-#endif
-
-#if (PROJECT_LOG_LEVEL >= LOG_LEVEL_TRACE)
-#define LOG_TRACE(fmt, ...) \
-    Log_Printf(COLOR_CYAN, LOG_TAG, fmt, ##__VA_ARGS__)
-#else
-#define LOG_TRACE(fmt, ...)       ((void)0)
-#endif
-
-#define LOG(fmt, ...)             LOG_PRINT(fmt, ##__VA_ARGS__)
-#define LOG_PRINT_COLOR(_color, fmt, ...) \
-    Log_Printf(_color, LOG_TAG, fmt, ##__VA_ARGS__)
-
-#endif /* AURON_LOG_H_ */
+#endif // LOG_H_
